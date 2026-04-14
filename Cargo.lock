@@ -3386,6 +3386,16 @@ dependencies = [
  "tree-sitter",
  "tree-sitter-python",
  "tree-sitter-ruby",
+ "yeast-macros",
+]
+
+[[package]]
+name = "yeast-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

@@ -145,9 +145,9 @@ mod tests {
         println!("{:?}", query2);
         let query3 = yeast::query!((foo child: (_)));
         println!("{:?}", query3);
-        let query4 = yeast::query!((foo child*: ((_)*)));
+        let query4 = yeast::query!((foo (_)*));
         println!("{:?}", query4);
-        let query5: QueryNode = yeast::query!((foo child*: ((_)*)));
+        let query5: QueryNode = yeast::query!((foo (_)*));
         println!("{:?}", query5);
         let query6: QueryNode = yeast::query!((_) @bar);
         println!("{:?}", query6);
@@ -159,7 +159,7 @@ mod tests {
             (assignment
                 left: (element_reference
                     object: @obj
-                    child: (_) @index
+                    (_) @index
                 )
                 right: (_) @rhs
             )
@@ -169,7 +169,7 @@ mod tests {
             (assignment
                 left: (element_reference
                     object*: ((@obj)*)
-                    child: (_) @index
+                    (_) @index
                 )
                 right: (_) @rhs
             )

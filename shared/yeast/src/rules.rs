@@ -10,7 +10,7 @@ pub fn rules() -> Vec<Rule> {
     let assign_query = yeast::query!(
         (assignment
             left: (left_assignment_list
-                child*: (((identifier) @left (",")?)*)
+                ((identifier) @left (",")?)*
             )
             right: @right
         )
@@ -45,7 +45,7 @@ pub fn rules() -> Vec<Rule> {
                     left: @lhs
                     right: (element_reference
                         object: @tmp
-                        child: @index
+                        @index
                     )
                 )
             )
@@ -70,8 +70,8 @@ pub fn rules() -> Vec<Rule> {
     let for_query = yeast::query!(
         (for
             pattern: @pat
-            value: (in child*: ("in" @val))
-            body: (do child*: (("do")? (@body)*))
+            value: (in "in" @val)
+            body: (do ("do")? (@body)*)
         )
     );
     let for_transform = move |ast: &mut Ast, mut match_: Captures| {
@@ -98,16 +98,14 @@ pub fn rules() -> Vec<Rule> {
                 method: @each
                 block: (block
                     parameters: (block_parameters
-                        child: @tmp_param
+                        @tmp_param
                     )
                     body: (block_body
-                        child*: (
-                            (assignment
-                                left: @pat
-                                right: @tmp_rhs
-                            )
-                            (@body)*
+                        (assignment
+                            left: @pat
+                            right: @tmp_rhs
                         )
+                        (@body)*
                     )
                 )
             )

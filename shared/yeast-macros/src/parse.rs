@@ -101,39 +101,46 @@ fn parse_query_node_inner(tokens: &mut Tokens) -> Result<TokenStream> {
     }
 }
 
-/// Parse zero or more field specifications: `name: pattern` or `name*: (list...)`.
+/// Parse zero or more field specifications and trailing bare patterns.
+/// Named fields: `name: pattern` or `name*: (list...)`.
+/// Bare patterns (no field name) become implicit `child` field entries.
 fn parse_query_fields(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
     let mut fields = Vec::new();
     while tokens.peek().is_some() {
-        // Check for `ident :` or `ident * :`
-        if !peek_is_ident(tokens) {
-            break;
-        }
-        let field_name = expect_ident(tokens, "expected field name")?;
-        let field_str = field_name.to_string();
+        // Try to parse a named field: `ident :` or `ident * :`
+        if peek_is_field(tokens) {
+            let field_name = expect_ident(tokens, "expected field name")?;
+            let field_str = field_name.to_string();
 
-        // Check for `*` (list field)
-        let is_list = peek_is_star(tokens);
-        if is_list {
-            tokens.next(); // consume *
-        }
+            let is_list = peek_is_star(tokens);
+            if is_list {
+                tokens.next(); // consume *
+            }
 
-        expect_punct(tokens, ':', "expected `:` after field name")?;
+            expect_punct(tokens, ':', "expected `:` after field name")?;
 
-        if is_list {
-            // field*: (child_list)
-            let group = expect_group(tokens, Delimiter::Parenthesis)?;
-            let mut inner = group.stream().into_iter().peekable();
-            let elems = parse_query_list(&mut inner)?;
-            fields.push(quote! {
-                (#field_str, vec![#(#elems),*])
-            });
+            if is_list {
+                let group = expect_group(tokens, Delimiter::Parenthesis)?;
+                let mut inner = group.stream().into_iter().peekable();
+                let elems = parse_query_list(&mut inner)?;
+                fields.push(quote! {
+                    (#field_str, vec![#(#elems),*])
+                });
+            } else {
+                let child = parse_query_node(tokens)?;
+                fields.push(quote! {
+                    (#field_str, vec![yeast::query::QueryListElem::SingleNode(#child)])
+                });
+            }
         } else {
-            // field: (single_node)
-            let child = parse_query_node(tokens)?;
-            fields.push(quote! {
-                (#field_str, vec![yeast::query::QueryListElem::SingleNode(#child)])
-            });
+            // Bare patterns — collect as implicit `child` field
+            let elems = parse_query_list(tokens)?;
+            if !elems.is_empty() {
+                fields.push(quote! {
+                    ("child", vec![#(#elems),*])
+                });
+            }
+            break;
         }
     }
     Ok(fields)
@@ -289,35 +296,43 @@ fn parse_builder_node_inner(tokens: &mut Tokens) -> Result<TokenStream> {
     }
 }
 
-/// Parse builder fields: `name: pattern` or `name*: (list...)`.
+/// Parse builder fields and trailing bare patterns (implicit `child` field).
 fn parse_builder_fields(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
     let mut fields = Vec::new();
     while tokens.peek().is_some() {
-        if !peek_is_ident(tokens) {
-            break;
-        }
-        let field_name = expect_ident(tokens, "expected field name")?;
-        let field_str = field_name.to_string();
+        if peek_is_field(tokens) {
+            let field_name = expect_ident(tokens, "expected field name")?;
+            let field_str = field_name.to_string();
 
-        let is_list = peek_is_star(tokens);
-        if is_list {
-            tokens.next();
-        }
+            let is_list = peek_is_star(tokens);
+            if is_list {
+                tokens.next();
+            }
 
-        expect_punct(tokens, ':', "expected `:` after field name")?;
+            expect_punct(tokens, ':', "expected `:` after field name")?;
 
-        if is_list {
-            let group = expect_group(tokens, Delimiter::Parenthesis)?;
-            let mut inner = group.stream().into_iter().peekable();
-            let children = parse_builder_child_list(&mut inner)?;
-            fields.push(quote! {
-                (#field_str, vec![#(#children),*])
-            });
+            if is_list {
+                let group = expect_group(tokens, Delimiter::Parenthesis)?;
+                let mut inner = group.stream().into_iter().peekable();
+                let children = parse_builder_child_list(&mut inner)?;
+                fields.push(quote! {
+                    (#field_str, vec![#(#children),*])
+                });
+            } else {
+                let child = parse_builder_node(tokens)?;
+                fields.push(quote! {
+                    (#field_str, vec![yeast::tree_builder::TreeChildBuilder::SingleNode(#child)])
+                });
+            }
         } else {
-            let child = parse_builder_node(tokens)?;
-            fields.push(quote! {
-                (#field_str, vec![yeast::tree_builder::TreeChildBuilder::SingleNode(#child)])
-            });
+            // Bare patterns — collect as implicit `child` field
+            let children = parse_builder_child_list(tokens)?;
+            if !children.is_empty() {
+                fields.push(quote! {
+                    ("child", vec![#(#children),*])
+                });
+            }
+            break;
         }
     }
     Ok(fields)
@@ -381,16 +396,22 @@ fn peek_is_star(tokens: &mut Tokens) -> bool {
     matches!(tokens.peek(), Some(TokenTree::Punct(p)) if p.as_char() == '*')
 }
 
-fn peek_is_ident(tokens: &mut Tokens) -> bool {
-    matches!(tokens.peek(), Some(TokenTree::Ident(_)))
-}
-
 fn peek_is_literal(tokens: &mut Tokens) -> bool {
     matches!(tokens.peek(), Some(TokenTree::Literal(_)))
 }
 
 fn peek_is_underscore(tokens: &mut Tokens) -> bool {
     matches!(tokens.peek(), Some(TokenTree::Ident(id)) if id.to_string() == "_")
+}
+
+/// Check if the next tokens form a field specification (ident followed by `:` or `*:`).
+/// A bare identifier (other than `_`) at this position is always a field name, since
+/// bare child patterns must start with `(`, `@`, `"literal"`, or `_`.
+fn peek_is_field(tokens: &mut Tokens) -> bool {
+    match tokens.peek() {
+        Some(TokenTree::Ident(id)) if id.to_string() != "_" => true,
+        _ => false,
+    }
 }
 
 fn peek_is_group(tokens: &mut Tokens, delim: Delimiter) -> bool {
