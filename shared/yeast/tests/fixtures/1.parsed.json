@@ -1,0 +1,68 @@
+{
+  "program": {
+    "content": "x, y, z = foo()\n",
+    "rest": [
+      {
+        "assignment": {
+          "content": "x, y, z = foo()",
+          "left": [
+            {
+              "left_assignment_list": {
+                "content": "x, y, z",
+                "rest": [
+                  {
+                    "identifier": "x"
+                  },
+                  {
+                    ",": ","
+                  },
+                  {
+                    "identifier": "y"
+                  },
+                  {
+                    ",": ","
+                  },
+                  {
+                    "identifier": "z"
+                  }
+                ]
+              }
+            }
+          ],
+          "rest": [
+            {
+              "=": "="
+            }
+          ],
+          "right": [
+            {
+              "call": {
+                "arguments": [
+                  {
+                    "argument_list": {
+                      "content": "()",
+                      "rest": [
+                        {
+                          "(": "("
+                        },
+                        {
+                          ")": ")"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "content": "foo()",
+                "method": [
+                  {
+                    "identifier": "foo"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "program": {
+    "content": "for a, b in pairs_list do\n  x=y\nend",
+    "rest": [
+      {
+        "for": {
+          "body": [
+            {
+              "do": {
+                "content": "do\n  x=y\nend",
+                "rest": [
+                  {
+                    "do": "do"
+                  },
+                  {
+                    "assignment": {
+                      "content": "x=y",
+                      "left": [
+                        {
+                          "identifier": "x"
+                        }
+                      ],
+                      "rest": [
+                        {
+                          "=": "="
+                        }
+                      ],
+                      "right": [
+                        {
+                          "identifier": "y"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "end": "end"
+                  }
+                ]
+              }
+            }
+          ],
+          "content": "for a, b in pairs_list do\n  x=y\nend",
+          "pattern": [
+            {
+              "left_assignment_list": {
+                "content": "a, b",
+                "rest": [
+                  {
+                    "identifier": "a"
+                  },
+                  {
+                    ",": ","
+                  },
+                  {
+                    "identifier": "b"
+                  }
+                ]
+              }
+            }
+          ],
+          "rest": [
+            {
+              "for": "for"
+            }
+          ],
+          "value": [
+            {
+              "in": {
+                "content": "in pairs_list",
+                "rest": [
+                  {
+                    "in": "in"
+                  },
+                  {
+                    "identifier": "pairs_list"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
