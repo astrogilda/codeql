@@ -7,13 +7,13 @@ pub fn rules() -> Vec<Rule> {
     let fresh_ids = Rc::new(Cell::new(0));
     let fresh_ids2: Rc<Cell<i32>> = fresh_ids.clone();
 
-    let assign_query = query!(
-            (assignment
-                left: (
-                    left_assignment_list child*: ((((identifier) @ left) (",")?)*)
-                )
-                right: (@right)
+    let assign_query = yeast::query!(
+        (assignment
+            left: (left_assignment_list
+                child*: (((identifier) @left (",")?)*)
             )
+            right: @right
+        )
     );
     let assign_transform = move |ast: &mut Ast, mut match_: Captures| {
         println!("match: {:?}", match_);
@@ -40,13 +40,12 @@ pub fn rules() -> Vec<Rule> {
                 "index",
                 ast.create_named_token("integer", index.to_string()),
             );
-            tree_builder!(
+            yeast::tree_builder!(
                 (assignment
-                    left: (@lhs)
-                    right: (
-                        element_reference
-                            object: (@tmp)
-                            child: (@index)
+                    left: @lhs
+                    right: (element_reference
+                        object: @tmp
+                        child: @index
                     )
                 )
             )
@@ -54,16 +53,12 @@ pub fn rules() -> Vec<Rule> {
             .unwrap()
         });
 
-        // construct the new tree here maybe
-        // captures is probably a HashMap from capture name to AST node
-        trees_builder!(
+        yeast::trees_builder!(
             (assignment
-                left: (@tmp_lhs)
-                right: (@right)
+                left: @tmp_lhs
+                right: @right
             )
-            (
-                @assigns
-            )*
+            (@assigns)*
         )
         .build_trees(ast, &match_)
         .unwrap()
@@ -72,9 +67,9 @@ pub fn rules() -> Vec<Rule> {
     let assign_rule = Rule::new(assign_query, Box::new(assign_transform));
 
     // TODO: There is a spurious end token
-    let for_query = query!(
+    let for_query = yeast::query!(
         (for
-            pattern: (@pat)
+            pattern: @pat
             value: (in child*: ("in" @val))
             body: (do child*: (("do")? (@body)*))
         )
@@ -97,27 +92,25 @@ pub fn rules() -> Vec<Rule> {
             ast.create_named_token("identifier", "each".to_string()),
         );
 
-        trees_builder!(
+        yeast::trees_builder!(
             (call
-                receiver: (@val)
-                method: (@each)
+                receiver: @val
+                method: @each
                 block: (block
-                    parameters: (
-                        block_parameters
-                            child: (@tmp_param)
+                    parameters: (block_parameters
+                        child: @tmp_param
                     )
                     body: (block_body
                         child*: (
                             (assignment
-                                left: (@pat)
-                                right: (@tmp_rhs)
+                                left: @pat
+                                right: @tmp_rhs
                             )
                             (@body)*
                         )
                     )
                 )
             )
-
         )
         .build_trees(ast, &match_)
         .unwrap()
@@ -126,7 +119,7 @@ pub fn rules() -> Vec<Rule> {
     let for_rule = Rule::new(for_query, Box::new(for_transform));
 
     // Just get rid of all end tokens as they aren't needed
-    let end_query = query!(("end"));
+    let end_query = yeast::query!(("end"));
     let end_transform = |_ast: &mut Ast, _match: Captures| vec![];
     let end_rule = Rule::new(end_query, Box::new(end_transform));
     vec![assign_rule, for_rule, end_rule]

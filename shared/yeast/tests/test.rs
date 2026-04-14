@@ -71,14 +71,13 @@ fn test_query_input() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
     let mut ast = runner.run(&input);
 
-    let query = yeast::query::query!(
-        program  child:(
-            (assignment
-                left: (@left)
-                right: (@right)
+    let query = yeast::query!(
+        (program
+            child: (assignment
+                left: @left
+                right: @right
                 child*: ((@rest)*)
             )
-
         )
     );
     print!("query: {:?}", query);
@@ -90,13 +89,14 @@ fn test_query_input() {
         println!("no match");
     }
 
-    let builder = yeast::tree_builder::tree_builder!(
-        program child:
-            (assignment
-                left: (@right)
-                right: (@left)
-                child*:((@rest)*)
+    let builder = yeast::tree_builder!(
+        (program
+            child: (assignment
+                left: @right
+                right: @left
+                child*: ((@rest)*)
             )
+        )
     );
 
     let new_id = builder.build_tree(&mut ast, &matches).unwrap();

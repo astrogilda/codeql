@@ -95,56 +95,6 @@ impl TreeBuilder {
     }
 }
 
-#[macro_export]
-macro_rules! tree_builder {
-    (($($child:tt)*)) => { tree_builder!($($child)*)};
-    // Match a node of a given kind
-    ($node_id:ident $($rest:tt)*) => { $crate::tree_builder::TreeBuilder::Node{ kind: stringify!($node_id), children: tree_builder_fields!($($rest)*)}};
-    // Capture only (implicit _)
-    (@ $capture_id:ident) => { $crate::tree_builder::TreeBuilder::Capture{ capture: stringify!($capture_id)}};
-}
-
-// We use an accumulator to build up the list of children incrementally so this starts the tail recursion
-#[macro_export]
-macro_rules! tree_builder_child {
-    () => { Vec::new()};
-    ($($rest:tt)*) => { _tree_builder_child!( @ACC [] $($rest)* )};
-}
-
-#[macro_export]
-macro_rules! _tree_builder_child {
-    // vec! allows a trailing comma so we assume that either the accumulator is empty or`ends in a comma
-
-    // Base case: no more tokens, so return the accumulator
-    (@ACC [$($acc:tt)*]) => { vec![$($acc)*]};
-    // Parse field* : node
-    (@ACC [$($acc:tt)*] $field_name:ident * : ($($sub_node:tt)*) $($rest:tt)*) => {  _tree_builder_child!( @ACC [ $($acc)* $crate::tree_builder::TreeChildBuilder::Field{field_name: stringify!($field_name), node: tree_builder_child!($($sub_node)*)},] $($rest)*)};
-    // Parse field : node
-    (@ACC [$($acc:tt)*] $field_name:ident : $sub_node:tt $($rest:tt)*) => {  _tree_builder_child!( @ACC [ $($acc)* $crate::tree_builder::TreeChildBuilder::Field{field_name: stringify!($field_name), node: vec![$crate::tree_builder::TreeChildBuilder::SingleNode(tree_builder!($sub_node))]},] $($rest)*)};
-
-    // Parse (node)*
-    (@ACC [$($acc:tt)*] $sub_node:tt * $($rest:tt)*) => {  _tree_builder_child!( @ACC [ $($acc)* $crate::tree_builder::TreeChildBuilder::Repeated{child: tree_builder!($sub_node)},] $($rest)*)};
-    // Parse node (this must be last as it only applies if the earlier cases don't match)
-    (@ACC [$($acc:tt)*] $sub_node:tt $($rest:tt)*) => { _tree_builder_child!( @ACC [ $($acc)* $crate::tree_builder::TreeChildBuilder::SingleNode(tree_builder!($sub_node)),] $($rest)*)};
-}
-
-
-#[macro_export]
-macro_rules! _tree_builder_fields {
-    // vec! allows a trailing comma so we assume that either the accumulator is empty or`ends in a comma
-
-    // Base case: no more tokens, so return the accumulator
-    (@ACC [$($acc:tt)*]) => { vec![$($acc)*]};
-    // Parse field* : node
-    (@ACC [$($acc:tt)*] $field_name:ident * : ($($sub_node:tt)*) $($rest:tt)*) => {  _tree_builder_fields!( @ACC [ $($acc)* (stringify!($field_name), tree_builder_child!($($sub_node)*)),] $($rest)*)};
-    // Parse field : node
-    (@ACC [$($acc:tt)*] $field_name:ident : $sub_node:tt $($rest:tt)*) => {  _tree_builder_fields!( @ACC [ $($acc)* (stringify!($field_name), vec![$crate::tree_builder::TreeChildBuilder::SingleNode(tree_builder!($sub_node))]),] $($rest)*)};
-}
-#[macro_export]
-macro_rules! tree_builder_fields {
-    ($($all:tt)*) => { _tree_builder_fields!( @ACC [] $($all)*)};
-}
-
 pub struct TreesBuilder {
     pub children: Vec<TreeChildBuilder>,
 }
@@ -158,13 +108,3 @@ impl TreesBuilder {
         Ok(child_ids)
     }
 }
-
-#[macro_export]
-macro_rules! trees_builder {
-    () => { $crate::tree_builder::TreesBuilder { children: Vec::new()}};
-    ($($rest:tt)*) => {$crate::tree_builder::TreesBuilder { children: _tree_builder_child!( @ACC [] $($rest)* )}};
-}
-
-pub use tree_builder;
-pub use tree_builder_child;
-pub use trees_builder;

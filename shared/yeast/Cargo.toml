@@ -8,6 +8,7 @@ clap = { version = "4.4.10", features = ["derive"] }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 tree-sitter = "0.24"
+yeast-macros = { path = "../yeast-macros" }
 
 tree-sitter-ruby = "0.23"
 tree-sitter-python = "0.23"

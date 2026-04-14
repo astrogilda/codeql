@@ -134,110 +134,55 @@ impl QueryListElem {
     }
 }
 
-#[macro_export]
-macro_rules! query {
-    // _
-    (_) => { $crate::query::QueryNode::Any()};
-    // Parens
-    (($($child:tt)*)) => { query!($($child)*)};
-    // Match a node of a given kind
-    ($node_id:ident $($rest:tt)*) => { $crate::query::QueryNode::Node{ kind: stringify!($node_id), children: query_fields!($($rest)*)}};
-    // Match an unamed node of a given kind (using a string literal)
-    ($node_id:literal) => { $crate::query::QueryNode::UnnamedNode{ kind: $node_id}};
-    // Capture
-    ($child:tt @ $capture_id:ident) => { $crate::query::QueryNode::Capture{ capture: stringify!($capture_id), node: Box::new(query!($child))}};
-    // Capture only (implicit _)
-    (@ $capture_id:ident) => { $crate::query::QueryNode::Capture{ capture: stringify!($capture_id), node: Box::new($crate::query::QueryNode::Any())}};
-}
-
-// We use an accumulator to build up the list of children incrementally so this starts the tail recursion
-#[macro_export]
-macro_rules! query_list {
-    ($($rest:tt)*) => { _query_list!( @ACC [] $($rest)* )};
-}
-
-#[macro_export]
-macro_rules! query_fields {
-    ($($rest:tt)*) => { _query_fields!( @ACC [] $($rest)* )};
-}
-
-#[macro_export]
-macro_rules! _query_fields {
-    // vec! allows a trailing comma so we assume that either the accumulator is empty or`ends in a comma
-
-    // Base case: no more tokens, so return the accumulator
-    (@ACC [$($acc:tt)*]) => { vec![$($acc)*]};
-    // Parse field * : (nodeList)
-    (@ACC [$($acc:tt)*] $field_name:ident * : ($($sub_node:tt)*) $($rest:tt)*) => {  _query_fields!( @ACC [ $($acc)* (stringify!($field_name), query_list!($($sub_node)*)),] $($rest)*)};
-    // Parse field : node
-    (@ACC [$($acc:tt)*] $field_name:ident : $sub_node:tt $($rest:tt)*) => {  _query_fields!( @ACC [ $($acc)* (stringify!($field_name), vec![$crate::query::QueryListElem::SingleNode(query!($sub_node))]),]  $($rest)* )};
-}
-
-#[macro_export]
-macro_rules! _query_list {
-    // vec! allows a trailing comma so we assume that either the accumulator is empty or`ends in a comma
-
-    // Base case: no more tokens, so return the accumulator
-    (@ACC [$($acc:tt)*]) => { vec![$($acc)*]};
-    // Parse (nodeList)*
-    (@ACC [$($acc:tt)*] ($($sub_node:tt)*) * $($rest:tt)*) => {  _query_list!( @ACC [ $($acc)* $crate::query::QueryListElem::Repeated{children: query_list!($($sub_node)*), rep: $crate::query::Rep::ZeroOrMore},] $($rest)*)};
-    // Parse (nodeList)+
-    (@ACC [$($acc:tt)*] ($($sub_node:tt)*) + $($rest:tt)*) => {  _query_list!( @ACC [ $($acc)* $crate::query::QueryListElem::Repeated{children: query_list!($($sub_node)*), rep: $crate::query::Rep::OneOrMore},] $($rest)*)};
-    // Parse (nodeList)?
-    (@ACC [$($acc:tt)*] ($($sub_node:tt)*) ? $($rest:tt)*) => {  _query_list!( @ACC [ $($acc)* $crate::query::QueryListElem::Repeated{children: query_list!($($sub_node)*), rep: $crate::query::Rep::ZeroOrOne},] $($rest)*)};
-    // Parse node (treating @cap as a single node) 
-    (@ACC [$($acc:tt)*] @ $sub_node:tt $($rest:tt)*) => { _query_list!( @ACC [ $($acc)* $crate::query::QueryListElem::SingleNode(query!(@$sub_node)),] $($rest)*)};
-    // Parse node (this must be last as it only applies if the earlier cases don't match)
-    (@ACC [$($acc:tt)*] $sub_node:tt $($rest:tt)*) => { _query_list!( @ACC [ $($acc)* $crate::query::QueryListElem::SingleNode(query!($sub_node)),] $($rest)*)};
-}
-
-pub use query;
-pub use query_list;
-
 #[cfg(test)]
 mod tests {
     use crate::query::*;
     #[test]
     fn it_works() {
-        let query1: QueryNode = query!(_);
+        let query1: QueryNode = yeast::query!((_));
         println!("{:?}", query1);
-        let query2 = query!(foo);
+        let query2 = yeast::query!((foo));
         println!("{:?}", query2);
-        let query3 = query!(foo child: (_));
+        let query3 = yeast::query!((foo child: (_)));
         println!("{:?}", query3);
-        let query4 = query!(foo child*:((_)*));
+        let query4 = yeast::query!((foo child*: ((_)*)));
         println!("{:?}", query4);
-        let query5: QueryNode = query!(foo child*:((_)*));
+        let query5: QueryNode = yeast::query!((foo child*: ((_)*)));
         println!("{:?}", query5);
-        let query6: QueryNode = query!(_ @ bar);
+        let query6: QueryNode = yeast::query!((_) @bar);
         println!("{:?}", query6);
-        let query7: QueryNode = query!(foo child:(_ @ bar));
+        let query7: QueryNode = yeast::query!((foo child: (_) @bar));
         println!("{:?}", query7);
-        let query7: QueryNode = query!(foo child:(@ bar));
+        let query7: QueryNode = yeast::query!((foo child: @bar));
         println!("{:?}", query7);
-        let query8: QueryNode = query!((assignment
-          left: (element_reference
-            object: (@ obj)
-            child: (_ @ index)
-          )
-          right: (_ @ rhs)
-        ));
+        let query8: QueryNode = yeast::query!(
+            (assignment
+                left: (element_reference
+                    object: @obj
+                    child: (_) @index
+                )
+                right: (_) @rhs
+            )
+        );
         println!("{:?}", query8);
-        let query9: QueryNode = query!((assignment
-          left: (element_reference
-            object * : ((@ obj)*)
-            child: (_ @ index)
-          )
-          right: (_ @ rhs)
-        ));
+        let query9: QueryNode = yeast::query!(
+            (assignment
+                left: (element_reference
+                    object*: ((@obj)*)
+                    child: (_) @index
+                )
+                right: (_) @rhs
+            )
+        );
         println!("{:?}", query9);
-        let query10 = query!(
-            program 
+        let query10 = yeast::query!(
+            (program
                 child: (assignment
-                    left: (@left)
-                    right: (@right))
-                
-            );
+                    left: @left
+                    right: @right
+                )
+            )
+        );
         println!("{:?}", query10);
     }
 }

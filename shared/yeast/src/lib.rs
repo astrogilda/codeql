@@ -1,5 +1,7 @@
 use std::{collections::BTreeMap, mem};
 
+extern crate self as yeast;
+
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -11,6 +13,8 @@ mod range;
 pub mod rules;
 pub mod tree_builder;
 mod visitor;
+
+pub use yeast_macros::{query, tree_builder, trees_builder};
 
 use captures::Captures;
 pub use cursor::Cursor;
