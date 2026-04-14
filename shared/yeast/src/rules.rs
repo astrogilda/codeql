@@ -71,7 +71,7 @@ pub fn rules() -> Vec<Rule> {
         (for
             pattern: @pat
             value: (in "in" @val)
-            body: (do ("do")? (@body)*)
+            body: (do "do"? (@body)*)
         )
     );
     let for_transform = move |ast: &mut Ast, mut match_: Captures| {
