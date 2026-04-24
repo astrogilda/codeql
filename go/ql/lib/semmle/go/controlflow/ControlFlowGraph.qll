@@ -340,7 +340,10 @@ module ControlFlow {
    * cannot return normally, but never fails to hold of a function that can return normally.
    */
   predicate mayReturnNormally(FuncDecl f) {
-    exists(GoCfg::ControlFlow::NormalExitNode exit | exit.getEnclosingCallable() = f)
+    exists(GoCfg::ControlFlow::NormalExitNode exit |
+      exit.getEnclosingCallable() = f and
+      exists(exit.getAPredecessor())
+    )
   }
 
   /**

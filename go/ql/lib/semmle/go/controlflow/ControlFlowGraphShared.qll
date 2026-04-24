@@ -79,8 +79,7 @@ module GoCfg {
       or
       not node instanceof Callable and
       not exists(node.getEnclosingFunction()) and
-      result = node.getFile() and
-      result instanceof Callable
+      result = node.getFile()
     }
 
     class Stmt = Go::Stmt;
@@ -292,6 +291,10 @@ module GoCfg {
     predicate preOrderExpr(Ast::Expr e) { none() }
 
     predicate postOrInOrder(Ast::AstNode n) {
+      n instanceof Go::ReferenceExpr
+      or
+      n instanceof Go::BasicLit
+      or
       n instanceof Go::CallExpr and
       not n = any(Go::DeferStmt defer).getCall() and
       not n = any(Go::GoStmt go_).getCall()
@@ -633,6 +636,12 @@ module GoCfg {
         c.hasLabel(TGoLabel(lbl.getLabel()))
       )
       or
+      exists(Go::FuncDef fd |
+        ast = fd.getBody() and
+        c.getSuccessorType() instanceof ReturnSuccessor and
+        n.isAfter(fd.getBody())
+      )
+      or
       exists(Go::LabeledStmt lbl, Go::FuncDef fd |
         ast = fd.getBody() and
         n.isBefore(lbl) and
@@ -839,6 +848,13 @@ module GoCfg {
         exists(Ast::AstNode lastChild | lastChild = getLastRankedChild(ret) |
           // After last expr → first return epilogue
           n1.isAfter(lastChild) and n2.isAdditional(ret, getFirstReturnEpilogueTag(ret))
+        )
+        or
+        exists(Ast::AstNode lastChild | lastChild = getLastRankedChild(ret) |
+          // After last expr → return node directly if there is no return epilogue
+          not exists(getFirstReturnEpilogueTag(ret)) and
+          n1.isAfter(lastChild) and
+          n2.isIn(ret)
         )
         or
         // No expressions → before → return node directly
