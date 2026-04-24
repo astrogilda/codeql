@@ -1,0 +1,11 @@
+# THIS FILE IS AN AUTO-GENERATED MODELS AS DATA FILE. DO NOT EDIT.
+# Generated from https://github.com/apache/avro.git#79017ee391c04f60bdffd5fecf9ecc27c1b1f420 by codeql-mads-via-llm
+extensions:
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sinkModel
+    data:
+      - ["org.apache.avro.io", "DatumReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.io", "ExecutionStep", True, "execute", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.io", "FieldReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.io", "RecordReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]

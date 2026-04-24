@@ -1,0 +1,13 @@
+# THIS FILE IS AN AUTO-GENERATED MODELS AS DATA FILE. DO NOT EDIT.
+# Generated from https://github.com/apache/avro.git#79017ee391c04f60bdffd5fecf9ecc27c1b1f420 by codeql-mads-via-llm
+extensions:
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sinkModel
+    data:
+      - ["org.apache.avro.specific", "SpecificDatumReader", True, "readField", "(Object,Schema$Field,Object,ResolvingDecoder,Object)", "", "Argument[3]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.specific", "SpecificDatumReader", True, "readRecord", "(Object,Schema,ResolvingDecoder)", "", "Argument[2]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.specific", "SpecificExceptionBase", True, "readExternal", "(ObjectInput)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.specific", "SpecificFixed", True, "readExternal", "(ObjectInput)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.specific", "SpecificRecordBase", True, "customDecode", "(ResolvingDecoder)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.specific", "SpecificRecordBase", True, "readExternal", "(ObjectInput)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]

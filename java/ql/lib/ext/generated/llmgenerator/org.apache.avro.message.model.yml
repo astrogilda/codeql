@@ -1,0 +1,20 @@
+# THIS FILE IS AN AUTO-GENERATED MODELS AS DATA FILE. DO NOT EDIT.
+# Generated from https://github.com/apache/avro.git#79017ee391c04f60bdffd5fecf9ecc27c1b1f420 by codeql-mads-via-llm
+extensions:
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sinkModel
+    data:
+      - ["org.apache.avro.message", "BaseDecoder", True, "decode", "(ByteBuffer)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "BaseDecoder", True, "decode", "(ByteBuffer,Object)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "BaseDecoder", True, "decode", "(InputStream)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "BaseDecoder", True, "decode", "(byte[])", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "BaseDecoder", True, "decode", "(byte[],Object)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "BinaryMessageDecoder", True, "decode", "(InputStream,Object)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "MessageDecoder", True, "decode", "(ByteBuffer)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "MessageDecoder", True, "decode", "(ByteBuffer,Object)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "MessageDecoder", True, "decode", "(InputStream)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "MessageDecoder", True, "decode", "(InputStream,Object)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "MessageDecoder", True, "decode", "(byte[])", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "MessageDecoder", True, "decode", "(byte[],Object)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.message", "RawMessageDecoder", True, "decode", "(InputStream,Object)", "", "Argument[0]", "unsafe-deserialization", "llm-generated"]

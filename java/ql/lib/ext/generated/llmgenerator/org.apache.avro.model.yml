@@ -1,0 +1,22 @@
+# THIS FILE IS AN AUTO-GENERATED MODELS AS DATA FILE. DO NOT EDIT.
+# Generated from https://github.com/apache/avro.git#79017ee391c04f60bdffd5fecf9ecc27c1b1f420 by codeql-mads-via-llm
+extensions:
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sinkModel
+    data:
+      - ["org.apache.avro", "Parser", True, "parse", "(File)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro", "Protocol", True, "parse", "(File)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro", "Schema", True, "parse", "(File)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro", "SchemaParser", True, "parse", "(File)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro", "SchemaParser", True, "parse", "(File,Charset)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro", "SchemaParser", True, "parse", "(Path)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro", "SchemaParser", True, "parse", "(Path,Charset)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro", "SchemaParser", True, "parse", "(URI,Charset)", "", "Argument[0]", "request-forgery", "llm-generated"]
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sourceModel
+    data:
+      - ["org.apache.avro", "Parser", True, "parse", "(File)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro", "Protocol", True, "parse", "(File)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro", "Schema", True, "parse", "(File)", "", "ReturnValue", "file", "llm-generated"]

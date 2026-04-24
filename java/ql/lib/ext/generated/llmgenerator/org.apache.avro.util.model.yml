@@ -1,0 +1,13 @@
+# THIS FILE IS AN AUTO-GENERATED MODELS AS DATA FILE. DO NOT EDIT.
+# Generated from https://github.com/apache/avro.git#79017ee391c04f60bdffd5fecf9ecc27c1b1f420 by codeql-mads-via-llm
+extensions:
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sinkModel
+    data:
+      - ["org.apache.avro.util", "RandomData", True, "main", "(String[])", "", "Argument[0]", "path-injection", "llm-generated"]
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sourceModel
+    data:
+      - ["org.apache.avro.util", "RandomData", True, "main", "(String[])", "", "Argument[0]", "commandargs", "llm-generated"]

@@ -1,0 +1,38 @@
+# THIS FILE IS AN AUTO-GENERATED MODELS AS DATA FILE. DO NOT EDIT.
+# Generated from https://github.com/apache/avro.git#79017ee391c04f60bdffd5fecf9ecc27c1b1f420 by codeql-mads-via-llm
+extensions:
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sinkModel
+    data:
+      - ["org.apache.avro.file", "DataFileReader", True, "DataFileReader", "(File,DatumReader)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileReader", True, "openReader", "(File,DatumReader)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileWriter", True, "appendTo", "(File)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileWriter", True, "create", "(Schema,File)", "", "Argument[1]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "SeekableFileInput", True, "SeekableFileInput", "(File)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "SyncableFileOutputStream", True, "SyncableFileOutputStream", "(File)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "SyncableFileOutputStream", True, "SyncableFileOutputStream", "(File,boolean)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "SyncableFileOutputStream", True, "SyncableFileOutputStream", "(String)", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.file", "SyncableFileOutputStream", True, "SyncableFileOutputStream", "(String,boolean)", "", "Argument[0]", "path-injection", "llm-generated"]
+  - addsTo:
+      pack: codeql/java-all
+      extensible: sourceModel
+    data:
+      - ["org.apache.avro.file", "DataFileReader12", True, "getMeta", "(String)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileReader12", True, "getMetaString", "(String)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileReader12", True, "getSchema", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileReader12", True, "iterator", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileReader12", True, "next", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileReader12", True, "next", "(Object)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "getHeader", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "getMeta", "(String)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "getMetaKeys", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "getMetaString", "(String)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "getSchema", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "iterator", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "next", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "next", "(Object)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "DataFileStream", True, "nextBlock", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "FileReader", True, "getSchema", "()", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "FileReader", True, "next", "(Object)", "", "ReturnValue", "file", "llm-generated"]
+      - ["org.apache.avro.file", "SeekableInput", True, "read", "(byte[],int,int)", "", "Argument[0]", "file", "llm-generated"]
