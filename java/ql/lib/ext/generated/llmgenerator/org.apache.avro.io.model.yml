@@ -5,7 +5,7 @@ extensions:
       pack: codeql/java-all
       extensible: sinkModel
     data:
-      - ["org.apache.avro.io", "DatumReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.io", "ExecutionStep", True, "execute", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.io", "FieldReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.io", "RecordReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.io", "DatumReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.io", "ExecutionStep", True, "execute", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.io", "FieldReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.io", "RecordReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "ai-generated"]

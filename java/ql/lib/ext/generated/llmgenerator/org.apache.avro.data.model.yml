@@ -5,4 +5,4 @@ extensions:
       pack: codeql/java-all
       extensible: sinkModel
     data:
-      - ["org.apache.avro.data", "ObjectReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.data", "ObjectReader", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "ai-generated"]

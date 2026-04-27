@@ -5,10 +5,10 @@ extensions:
       pack: codeql/java-all
       extensible: sinkModel
     data:
-      - ["org.apache.avro.reflect", "CustomEncoding", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "read", "(Object,Schema,ResolvingDecoder)", "", "Argument[2]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readArray", "(Object,Schema,ResolvingDecoder)", "", "Argument[2]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readBytes", "(Object,Schema,Decoder)", "", "Argument[2]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readField", "(Object,Schema$Field,Object,ResolvingDecoder,Object)", "", "Argument[3]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readInt", "(Object,Schema,Decoder)", "", "Argument[2]", "unsafe-deserialization", "llm-generated"]
-      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readString", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "llm-generated"]
+      - ["org.apache.avro.reflect", "CustomEncoding", True, "read", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "read", "(Object,Schema,ResolvingDecoder)", "", "Argument[2]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readArray", "(Object,Schema,ResolvingDecoder)", "", "Argument[2]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readBytes", "(Object,Schema,Decoder)", "", "Argument[2]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readField", "(Object,Schema$Field,Object,ResolvingDecoder,Object)", "", "Argument[3]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readInt", "(Object,Schema,Decoder)", "", "Argument[2]", "unsafe-deserialization", "ai-generated"]
+      - ["org.apache.avro.reflect", "ReflectDatumReader", True, "readString", "(Object,Decoder)", "", "Argument[1]", "unsafe-deserialization", "ai-generated"]

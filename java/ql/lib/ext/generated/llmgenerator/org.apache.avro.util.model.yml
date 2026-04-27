@@ -5,9 +5,9 @@ extensions:
       pack: codeql/java-all
       extensible: sinkModel
     data:
-      - ["org.apache.avro.util", "RandomData", True, "main", "(String[])", "", "Argument[0]", "path-injection", "llm-generated"]
+      - ["org.apache.avro.util", "RandomData", True, "main", "(String[])", "", "Argument[0]", "path-injection", "ai-generated"]
   - addsTo:
       pack: codeql/java-all
       extensible: sourceModel
     data:
-      - ["org.apache.avro.util", "RandomData", True, "main", "(String[])", "", "Argument[0]", "commandargs", "llm-generated"]
+      - ["org.apache.avro.util", "RandomData", True, "main", "(String[])", "", "Argument[0]", "commandargs", "ai-generated"]
