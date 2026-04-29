@@ -216,6 +216,34 @@ pub fn extract(
     source: &[u8],
     ranges: &[Range],
 ) {
+    extract_and_desugar(
+        language,
+        language_prefix,
+        schema,
+        diagnostics_writer,
+        trap_writer,
+        transformer,
+        path,
+        source,
+        ranges,
+        vec![],
+    )
+}
+
+/// Like [`extract`], but applies yeast desugaring rules to the parsed tree
+/// before extracting TRAP.
+pub fn extract_and_desugar(
+    language: &Language,
+    language_prefix: &str,
+    schema: &NodeTypeMap,
+    diagnostics_writer: &mut diagnostics::LogWriter,
+    trap_writer: &mut trap::Writer,
+    transformer: Option<&file_paths::PathTransformer>,
+    path: &Path,
+    source: &[u8],
+    ranges: &[Range],
+    rules: Vec<yeast::Rule>,
+) {
     let path_str = file_paths::normalize_and_transform_path(path, transformer);
     let span = tracing::span!(
         tracing::Level::TRACE,
@@ -243,12 +271,6 @@ pub fn extract(
         language_prefix,
         schema,
     );
-    // HACK: Pass the tree through yeast
-    let rules = if language_prefix == "ruby" {
-        yeast::rules::rules()
-    } else {
-        vec![]
-    };
     let runner = yeast::Runner::new(language.clone(), rules);
     let ast = runner.run_from_tree(&tree);
 
