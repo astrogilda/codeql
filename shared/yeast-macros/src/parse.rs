@@ -275,6 +275,31 @@ fn parse_builder_node_inner(tokens: &mut Tokens) -> Result<TokenStream> {
         Some(TokenTree::Ident(_)) => {
             let kind = expect_ident(tokens, "expected node kind")?;
             let kind_str = kind.to_string();
+
+            // Check for (kind "literal") — Literal node
+            if peek_is_literal(tokens) {
+                let lit = expect_literal(tokens)?;
+                return Ok(quote! {
+                    yeast::tree_builder::TreeBuilder::Literal {
+                        kind: #kind_str,
+                        value: #lit,
+                    }
+                });
+            }
+
+            // Check for (kind $fresh) — Fresh node
+            if peek_is_dollar(tokens) {
+                tokens.next(); // consume $
+                let name = expect_ident(tokens, "expected fresh variable name after $")?;
+                let name_str = name.to_string();
+                return Ok(quote! {
+                    yeast::tree_builder::TreeBuilder::Fresh {
+                        kind: #kind_str,
+                        name: #name_str,
+                    }
+                });
+            }
+
             let fields = parse_builder_fields(tokens)?;
             Ok(quote! {
                 yeast::tree_builder::TreeBuilder::Node {
@@ -398,6 +423,10 @@ fn peek_is_star(tokens: &mut Tokens) -> bool {
 
 fn peek_is_literal(tokens: &mut Tokens) -> bool {
     matches!(tokens.peek(), Some(TokenTree::Literal(_)))
+}
+
+fn peek_is_dollar(tokens: &mut Tokens) -> bool {
+    matches!(tokens.peek(), Some(TokenTree::Punct(p)) if p.as_char() == '$')
 }
 
 fn peek_is_underscore(tokens: &mut Tokens) -> bool {

@@ -1,12 +1,6 @@
-use std::cell::Cell;
-use std::rc::Rc;
-
-use crate::{captures::Captures, *};
+use crate::{captures::Captures, tree_builder::FreshScope, *};
 
 pub fn rules() -> Vec<Rule> {
-    let fresh_ids = Rc::new(Cell::new(0));
-    let fresh_ids2: Rc<Cell<i32>> = fresh_ids.clone();
-
     let assign_query = yeast::query!(
         (assignment
             left: (left_assignment_list
@@ -15,16 +9,12 @@ pub fn rules() -> Vec<Rule> {
             right: @right
         )
     );
-    let assign_transform = move |ast: &mut Ast, mut match_: Captures| {
-        println!("match: {:?}", match_);
-        let fresh = fresh_ids.get();
-        fresh_ids.set(fresh + 1);
+    let assign_transform = |ast: &mut Ast, mut match_: Captures| {
+        let fresh = FreshScope::new();
 
-        let new_ident = format!("tmp-{}", fresh);
-        match_.insert(
-            "tmp_lhs",
-            ast.create_named_token("identifier", new_ident.clone()),
-        );
+        let tmp_lhs = yeast::tree_builder!((identifier $tmp))
+            .build_tree(ast, &match_, &fresh).unwrap();
+        match_.insert("tmp_lhs", tmp_lhs);
 
         let mut i = 0;
         match_.map_captures_to("left", "assigns", &mut |old_id| {
@@ -32,7 +22,8 @@ pub fn rules() -> Vec<Rule> {
             local_capture.insert("lhs", old_id);
             local_capture.insert(
                 "tmp",
-                ast.create_named_token("identifier", new_ident.clone()),
+                yeast::tree_builder!((identifier $tmp))
+                    .build_tree(ast, &local_capture, &fresh).unwrap(),
             );
             let index: i32 = i;
             i += 1;
@@ -49,7 +40,7 @@ pub fn rules() -> Vec<Rule> {
                     )
                 )
             )
-            .build_tree(ast, &local_capture)
+            .build_tree(ast, &local_capture, &fresh)
             .unwrap()
         });
 
@@ -60,13 +51,12 @@ pub fn rules() -> Vec<Rule> {
             )
             (@assigns)*
         )
-        .build_trees(ast, &match_)
+        .build_trees(ast, &match_, &fresh)
         .unwrap()
     };
 
     let assign_rule = Rule::new(assign_query, Box::new(assign_transform));
 
-    // TODO: There is a spurious end token
     let for_query = yeast::query!(
         (for
             pattern: @pat
@@ -74,49 +64,32 @@ pub fn rules() -> Vec<Rule> {
             body: (do "do"? (@body)*)
         )
     );
-    let for_transform = move |ast: &mut Ast, mut match_: Captures| {
-        let fresh = fresh_ids2.get();
-        fresh_ids2.set(fresh + 1);
-
-        let new_ident = format!("tmp-{}", fresh);
-        match_.insert(
-            "tmp_rhs",
-            ast.create_named_token("identifier", new_ident.clone()),
-        );
-        match_.insert(
-            "tmp_param",
-            ast.create_named_token("identifier", new_ident.clone()),
-        );
-        match_.insert(
-            "each",
-            ast.create_named_token("identifier", "each".to_string()),
-        );
-
+    let for_transform = |ast: &mut Ast, match_: Captures| {
+        let fresh = FreshScope::new();
         yeast::trees_builder!(
             (call
                 receiver: @val
-                method: @each
+                method: (identifier "each")
                 block: (block
                     parameters: (block_parameters
-                        @tmp_param
+                        (identifier $tmp)
                     )
                     body: (block_body
                         (assignment
                             left: @pat
-                            right: @tmp_rhs
+                            right: (identifier $tmp)
                         )
                         (@body)*
                     )
                 )
             )
         )
-        .build_trees(ast, &match_)
+        .build_trees(ast, &match_, &fresh)
         .unwrap()
     };
 
     let for_rule = Rule::new(for_query, Box::new(for_transform));
 
-    // Just get rid of all end tokens as they aren't needed
     let end_query = yeast::query!(("end"));
     let end_transform = |_ast: &mut Ast, _match: Captures| vec![];
     let end_rule = Rule::new(end_query, Box::new(end_transform));

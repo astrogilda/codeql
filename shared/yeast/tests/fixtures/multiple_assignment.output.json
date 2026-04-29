@@ -17,12 +17,12 @@
                             "content": "",
                             "left": [
                               {
-                                "identifier": "tmp-1"
+                                "identifier": "$tmp-0"
                               }
                             ],
                             "right": [
                               {
-                                "identifier": "tmp-0"
+                                "identifier": "$tmp-0"
                               }
                             ]
                           }
@@ -41,7 +41,7 @@
                                   "content": "",
                                   "object": [
                                     {
-                                      "identifier": "tmp-1"
+                                      "identifier": "$tmp-0"
                                     }
                                   ],
                                   "rest": [
@@ -68,7 +68,7 @@
                                   "content": "",
                                   "object": [
                                     {
-                                      "identifier": "tmp-1"
+                                      "identifier": "$tmp-0"
                                     }
                                   ],
                                   "rest": [
@@ -112,7 +112,7 @@
                       "content": "",
                       "rest": [
                         {
-                          "identifier": "tmp-0"
+                          "identifier": "$tmp-0"
                         }
                       ]
                     }
