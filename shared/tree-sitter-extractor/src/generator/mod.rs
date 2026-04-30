@@ -68,7 +68,8 @@ pub fn generate(
         let token_name = format!("{}_token", &prefix);
         let tokeninfo_name = format!("{}_tokeninfo", &prefix);
         let reserved_word_name = format!("{}_reserved_word", &prefix);
-        let nodes = node_types::read_node_types_str(&prefix, language.node_types)?;
+        let effective_node_types = language.output_node_types.unwrap_or(language.node_types);
+        let nodes = node_types::read_node_types_str(&prefix, effective_node_types)?;
         let (dbscheme_entries, mut ast_node_members, token_kinds) = convert_nodes(&nodes);
         ast_node_members.insert(&token_name);
         writeln!(&mut dbscheme_writer, "/*- {} dbscheme -*/", language.name)?;

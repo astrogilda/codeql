@@ -12,6 +12,10 @@ pub struct LanguageSpec {
     pub prefix: &'static str,
     pub ts_language: tree_sitter::Language,
     pub node_types: &'static str,
+    /// If set, the extractor validates TRAP output against these node types
+    /// instead of `node_types`. Use when desugaring produces an AST that
+    /// differs from the tree-sitter grammar.
+    pub output_node_types: Option<&'static str>,
     pub file_globs: Vec<String>,
 }
 
@@ -86,7 +90,8 @@ impl Extractor {
 
         let mut schemas = vec![];
         for lang in &self.languages {
-            let schema = node_types::read_node_types_str(lang.prefix, lang.node_types)?;
+            let effective_node_types = lang.output_node_types.unwrap_or(lang.node_types);
+            let schema = node_types::read_node_types_str(lang.prefix, effective_node_types)?;
             schemas.push(schema);
         }
 

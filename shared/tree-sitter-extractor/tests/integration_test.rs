@@ -13,6 +13,7 @@ fn simple_extractor() {
         prefix: "ql",
         ts_language: tree_sitter_ql::LANGUAGE.into(),
         node_types: tree_sitter_ql::NODE_TYPES,
+        output_node_types: None,
         file_globs: vec!["*.qll".into()],
     };
 
