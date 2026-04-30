@@ -209,198 +209,6 @@ fn parse_query_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
 }
 
 // ---------------------------------------------------------------------------
-// Tree builder parsing
-// ---------------------------------------------------------------------------
-
-pub fn parse_tree_builder_top(input: TokenStream) -> Result<TokenStream> {
-    let mut tokens = input.into_iter().peekable();
-    let result = parse_builder_node(&mut tokens)?;
-    if let Some(tok) = tokens.next() {
-        return Err(syn::Error::new_spanned(tok, "unexpected token after tree_builder"));
-    }
-    Ok(result)
-}
-
-pub fn parse_trees_builder_top(input: TokenStream) -> Result<TokenStream> {
-    let mut tokens = input.into_iter().peekable();
-    if tokens.peek().is_none() {
-        return Ok(quote! {
-            yeast::tree_builder::TreesBuilder { children: Vec::new() }
-        });
-    }
-    let children = parse_builder_child_list(&mut tokens)?;
-    if let Some(tok) = tokens.next() {
-        return Err(syn::Error::new_spanned(tok, "unexpected token after trees_builder"));
-    }
-    Ok(quote! {
-        yeast::tree_builder::TreesBuilder {
-            children: vec![#(#children),*],
-        }
-    })
-}
-
-/// Parse a single tree builder node.
-fn parse_builder_node(tokens: &mut Tokens) -> Result<TokenStream> {
-    match tokens.peek() {
-        Some(TokenTree::Punct(p)) if p.as_char() == '@' => {
-            tokens.next();
-            let name = expect_ident(tokens, "expected capture name after @")?;
-            let name_str = name.to_string();
-            Ok(quote! {
-                yeast::tree_builder::TreeBuilder::Capture { capture: #name_str }
-            })
-        }
-        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => {
-            let group = expect_group(tokens, Delimiter::Parenthesis)?;
-            let mut inner = group.stream().into_iter().peekable();
-            parse_builder_node_inner(&mut inner)
-        }
-        Some(tok) => Err(syn::Error::new_spanned(tok.clone(), "expected `(` or `@` in tree_builder")),
-        None => Err(syn::Error::new(Span::call_site(), "unexpected end of tree_builder")),
-    }
-}
-
-/// Parse inside a parenthesized builder node.
-fn parse_builder_node_inner(tokens: &mut Tokens) -> Result<TokenStream> {
-    match tokens.peek() {
-        Some(TokenTree::Ident(_)) => {
-            let kind = expect_ident(tokens, "expected node kind")?;
-            let kind_str = kind.to_string();
-
-            // Check for (kind "literal") — Literal node
-            if peek_is_literal(tokens) {
-                let lit = expect_literal(tokens)?;
-                return Ok(quote! {
-                    yeast::tree_builder::TreeBuilder::Literal {
-                        kind: #kind_str,
-                        value: #lit,
-                    }
-                });
-            }
-
-            // Check for (kind $fresh) — Fresh node
-            if peek_is_dollar(tokens) {
-                tokens.next(); // consume $
-                let name = expect_ident(tokens, "expected fresh variable name after $")?;
-                let name_str = name.to_string();
-                return Ok(quote! {
-                    yeast::tree_builder::TreeBuilder::Fresh {
-                        kind: #kind_str,
-                        name: #name_str,
-                    }
-                });
-            }
-
-            let fields = parse_builder_fields(tokens)?;
-            Ok(quote! {
-                yeast::tree_builder::TreeBuilder::Node {
-                    kind: #kind_str,
-                    children: vec![#(#fields),*],
-                }
-            })
-        }
-        Some(TokenTree::Punct(p)) if p.as_char() == '@' => {
-            tokens.next();
-            let name = expect_ident(tokens, "expected capture name after @")?;
-            let name_str = name.to_string();
-            Ok(quote! {
-                yeast::tree_builder::TreeBuilder::Capture { capture: #name_str }
-            })
-        }
-        Some(tok) => Err(syn::Error::new_spanned(tok.clone(), "expected node kind or `@`")),
-        None => Err(syn::Error::new(Span::call_site(), "empty builder group")),
-    }
-}
-
-/// Parse builder fields and trailing bare patterns (implicit `child` field).
-fn parse_builder_fields(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
-    let mut fields = Vec::new();
-    while tokens.peek().is_some() {
-        if peek_is_field(tokens) {
-            let field_name = expect_ident(tokens, "expected field name")?;
-            let field_str = field_name.to_string();
-
-            let is_list = peek_is_star(tokens);
-            if is_list {
-                tokens.next();
-            }
-
-            expect_punct(tokens, ':', "expected `:` after field name")?;
-
-            if is_list {
-                let group = expect_group(tokens, Delimiter::Parenthesis)?;
-                let mut inner = group.stream().into_iter().peekable();
-                let children = parse_builder_child_list(&mut inner)?;
-                fields.push(quote! {
-                    (#field_str, vec![#(#children),*])
-                });
-            } else {
-                let child = parse_builder_node(tokens)?;
-                fields.push(quote! {
-                    (#field_str, vec![yeast::tree_builder::TreeChildBuilder::SingleNode(#child)])
-                });
-            }
-        } else {
-            // Bare patterns — collect as implicit `child` field
-            let children = parse_builder_child_list(tokens)?;
-            if !children.is_empty() {
-                fields.push(quote! {
-                    ("child", vec![#(#children),*])
-                });
-            }
-            break;
-        }
-    }
-    Ok(fields)
-}
-
-/// Parse a list of builder children (for `child*:` or `trees_builder!` top level).
-fn parse_builder_child_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
-    let mut children = Vec::new();
-    while tokens.peek().is_some() {
-        if peek_is_at(tokens) {
-            let node = parse_builder_node(tokens)?;
-            // Check for * repetition
-            if peek_is_star(tokens) {
-                tokens.next();
-                children.push(quote! {
-                    yeast::tree_builder::TreeChildBuilder::Repeated { child: #node }
-                });
-            } else {
-                children.push(quote! {
-                    yeast::tree_builder::TreeChildBuilder::SingleNode(#node)
-                });
-            }
-            continue;
-        }
-
-        if peek_is_group(tokens, Delimiter::Parenthesis) {
-            let group = expect_group(tokens, Delimiter::Parenthesis)?;
-            let mut inner = group.stream().into_iter().peekable();
-
-            if peek_is_star(tokens) {
-                // (pattern)* — repeated child
-                tokens.next();
-                let node = parse_builder_node_inner(&mut inner)?;
-                children.push(quote! {
-                    yeast::tree_builder::TreeChildBuilder::Repeated { child: #node }
-                });
-            } else {
-                // (pattern) — single child
-                let node = parse_builder_node_inner(&mut inner)?;
-                children.push(quote! {
-                    yeast::tree_builder::TreeChildBuilder::SingleNode(#node)
-                });
-            }
-            continue;
-        }
-
-        break;
-    }
-    Ok(children)
-}
-
-// ---------------------------------------------------------------------------
 // tree! / trees! parsing — direct code generation against BuildCtx
 // ---------------------------------------------------------------------------
 
@@ -411,19 +219,25 @@ pub fn parse_tree_top(input: TokenStream) -> Result<TokenStream> {
     let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
     expect_punct(&mut tokens, ',', "expected `,` after context")?;
 
-    // Parse all elements into a list
+    // Parse the first element as the single node
     let first = parse_direct_node(&mut tokens, &ctx)?;
-    let mut items = vec![quote! { __nodes.push(#first); }];
-
-    if tokens.peek().is_some() {
-        let rest = parse_direct_list(&mut tokens, &ctx)?;
-        items.extend(rest);
-    }
 
     if let Some(tok) = tokens.next() {
-        return Err(syn::Error::new_spanned(tok, "unexpected token after tree! template"));
+        return Err(syn::Error::new_spanned(tok, "unexpected tokens after tree! template; use vec![tree!(...), ...] for multiple nodes"));
     }
 
+    Ok(quote! { { #first } })
+}
+
+/// Parse `trees!(ctx, ...)` — returns `Vec<Id>`.
+pub fn parse_trees_top(input: TokenStream) -> Result<TokenStream> {
+    let mut tokens = input.into_iter().peekable();
+    let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
+    expect_punct(&mut tokens, ',', "expected `,` after context")?;
+    let items = parse_direct_list(&mut tokens, &ctx)?;
+    if let Some(tok) = tokens.next() {
+        return Err(syn::Error::new_spanned(tok, "unexpected token after trees! template"));
+    }
     Ok(quote! {
         {
             let mut __nodes: Vec<usize> = Vec::new();
@@ -431,11 +245,6 @@ pub fn parse_tree_top(input: TokenStream) -> Result<TokenStream> {
             __nodes
         }
     })
-}
-
-/// Kept for backward compatibility — identical to `parse_tree_top`.
-pub fn parse_trees_top(input: TokenStream) -> Result<TokenStream> {
-    parse_tree_top(input)
 }
 
 /// Parse a single node template and generate code that returns an `Id`.

@@ -88,7 +88,8 @@ fn test_query_input() {
         println!("no match");
     }
 
-    let builder = yeast::tree_builder!(
+    let mut ctx = yeast::build::BuildCtx::new(&mut ast, &matches);
+    let new_id = yeast::tree!(ctx,
         (program
             child: (assignment
                 left: @right
@@ -97,9 +98,7 @@ fn test_query_input() {
         )
     );
 
-    let new_id = builder.build_tree(&mut ast, &matches).unwrap();
-
-    let rewritten_actual = serde_json::to_string_pretty(&ast.print(&input, new_id)).unwrap();
+    let rewritten_actual = serde_json::to_string_pretty(&ctx.ast.print(&input, new_id)).unwrap();
 
     write_expected("tests/fixtures/1.rewritten.json", &rewritten_actual);
     assert_eq!(rewritten_actual, rewritten_expected);

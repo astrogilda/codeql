@@ -16,7 +16,7 @@ pub mod rules;
 pub mod tree_builder;
 mod visitor;
 
-pub use yeast_macros::{query, tree, tree_builder, trees, trees_builder};
+pub use yeast_macros::{query, tree, trees};
 
 use captures::Captures;
 pub use cursor::Cursor;

@@ -13,12 +13,12 @@ pub fn rules() -> Vec<Rule> {
         let left_ids = match_.get_all("left");
         let mut ctx = BuildCtx::new(ast, &match_);
 
-        yeast::tree!(ctx,
+        yeast::trees!(ctx,
             (assignment
                 left: (identifier $tmp)
                 right: @right
             )
-            {..left_ids.iter().enumerate().flat_map(|(i, &lhs)| {
+            {..left_ids.iter().enumerate().map(|(i, &lhs)| {
                 yeast::tree!(ctx,
                     (assignment
                         left: {lhs}
@@ -43,7 +43,7 @@ pub fn rules() -> Vec<Rule> {
     );
     let for_transform = |ast: &mut Ast, match_: Captures| {
         let mut ctx = BuildCtx::new(ast, &match_);
-        yeast::tree!(ctx,
+        vec![yeast::tree!(ctx,
             (call
                 receiver: @val
                 method: (identifier "each")
@@ -60,7 +60,7 @@ pub fn rules() -> Vec<Rule> {
                     )
                 )
             )
-        )
+        )]
     };
 
     let for_rule = Rule::new(for_query, Box::new(for_transform));

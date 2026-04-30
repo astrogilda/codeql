@@ -28,32 +28,6 @@ pub fn query(input: TokenStream) -> TokenStream {
     }
 }
 
-/// Proc macro for constructing a `TreeBuilder` from a tree-sitter-inspired template.
-///
-/// Uses the same node/field/capture syntax as `query!`, but captures refer to
-/// bound variables from a previous query match rather than binding new ones.
-#[proc_macro]
-pub fn tree_builder(input: TokenStream) -> TokenStream {
-    let input2: TokenStream2 = input.into();
-    match parse::parse_tree_builder_top(input2) {
-        Ok(output) => output.into(),
-        Err(err) => err.to_compile_error().into(),
-    }
-}
-
-/// Proc macro for constructing a `TreesBuilder` (list of trees) from a template.
-///
-/// Like `tree_builder!` but the top level is a sequence of patterns/captures,
-/// producing a `TreesBuilder { children: vec![...] }`.
-#[proc_macro]
-pub fn trees_builder(input: TokenStream) -> TokenStream {
-    let input2: TokenStream2 = input.into();
-    match parse::parse_trees_builder_top(input2) {
-        Ok(output) => output.into(),
-        Err(err) => err.to_compile_error().into(),
-    }
-}
-
 /// Build a single AST node from a template, returning its `Id`.
 ///
 /// # Syntax
