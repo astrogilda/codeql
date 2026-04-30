@@ -473,6 +473,13 @@ fn parse_direct_node_inner(tokens: &mut Tokens, ctx: &Ident) -> Result<TokenStre
         return Ok(quote! { #ctx.literal(#kind_str, #lit) });
     }
 
+    // Check for (kind {expr}) — computed literal, expr converted via .to_string()
+    if peek_is_group(tokens, Delimiter::Brace) {
+        let group = expect_group(tokens, Delimiter::Brace)?;
+        let expr = group.stream();
+        return Ok(quote! { #ctx.literal(#kind_str, &(#expr).to_string()) });
+    }
+
     // Check for (kind $fresh)
     if peek_is_dollar(tokens) {
         tokens.next();

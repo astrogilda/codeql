@@ -16,14 +16,12 @@ pub fn rules() -> Vec<Rule> {
         // Build individual x = tmp[i] assignments
         let mut ctx = BuildCtx::new(ast, &match_);
         for (i, &lhs) in left_ids.iter().enumerate() {
-            let tmp = yeast::tree!(ctx, (identifier $tmp));
-            let index = ctx.literal("integer", &i.to_string());
             let assign = yeast::tree!(ctx,
                 (assignment
                     left: {lhs}
                     right: (element_reference
-                        object: {tmp}
-                        {index}
+                        object: (identifier $tmp)
+                        (integer {i})
                     )
                 )
             );
