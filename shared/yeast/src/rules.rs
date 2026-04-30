@@ -28,7 +28,7 @@ pub fn rules() -> Vec<Rule> {
                         )
                     )
                 )
-            }).collect::<Vec<_>>()}
+            })}
         )
     };
 
