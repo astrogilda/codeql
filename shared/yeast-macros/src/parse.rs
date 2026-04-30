@@ -401,6 +401,222 @@ fn parse_builder_child_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
 }
 
 // ---------------------------------------------------------------------------
+// tree! / trees! parsing — direct code generation against BuildCtx
+// ---------------------------------------------------------------------------
+
+/// Parse `tree!(ctx, (template))` — first arg is context ident, then a comma,
+/// then a single node template.
+pub fn parse_tree_top(input: TokenStream) -> Result<TokenStream> {
+    let mut tokens = input.into_iter().peekable();
+    let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
+    expect_punct(&mut tokens, ',', "expected `,` after context")?;
+    let body = parse_direct_node(&mut tokens, &ctx)?;
+    if let Some(tok) = tokens.next() {
+        return Err(syn::Error::new_spanned(tok, "unexpected token after tree! template"));
+    }
+    Ok(quote! { { #body } })
+}
+
+/// Parse `trees!(ctx, (node1) (node2) {expr} ...)` — context ident, comma,
+/// then a list of node templates / embedded expressions.
+pub fn parse_trees_top(input: TokenStream) -> Result<TokenStream> {
+    let mut tokens = input.into_iter().peekable();
+    let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
+    expect_punct(&mut tokens, ',', "expected `,` after context")?;
+    let items = parse_direct_list(&mut tokens, &ctx)?;
+    if let Some(tok) = tokens.next() {
+        return Err(syn::Error::new_spanned(tok, "unexpected token after trees! template"));
+    }
+    Ok(quote! {
+        {
+            let mut __nodes: Vec<usize> = Vec::new();
+            #(#items)*
+            __nodes
+        }
+    })
+}
+
+/// Parse a single node template and generate code that returns an `Id`.
+/// Handles: `(kind fields... children...)`, `@capture`, `{expr}`.
+fn parse_direct_node(tokens: &mut Tokens, ctx: &Ident) -> Result<TokenStream> {
+    match tokens.peek() {
+        Some(TokenTree::Punct(p)) if p.as_char() == '@' => {
+            tokens.next();
+            let name = expect_ident(tokens, "expected capture name after @")?;
+            let name_str = name.to_string();
+            Ok(quote! { #ctx.capture(#name_str) })
+        }
+        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Brace => {
+            let group = expect_group(tokens, Delimiter::Brace)?;
+            let expr = group.stream();
+            Ok(quote! { #expr })
+        }
+        Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => {
+            let group = expect_group(tokens, Delimiter::Parenthesis)?;
+            let mut inner = group.stream().into_iter().peekable();
+            parse_direct_node_inner(&mut inner, ctx)
+        }
+        Some(tok) => Err(syn::Error::new_spanned(tok.clone(), "expected `(`, `@`, or `{` in tree template")),
+        None => Err(syn::Error::new(Span::call_site(), "unexpected end of tree template")),
+    }
+}
+
+/// Parse the inside of a parenthesized node: `kind fields... children...`
+/// or `kind "literal"` or `kind $fresh`.
+fn parse_direct_node_inner(tokens: &mut Tokens, ctx: &Ident) -> Result<TokenStream> {
+    let kind = expect_ident(tokens, "expected node kind")?;
+    let kind_str = kind.to_string();
+
+    // Check for (kind "literal")
+    if peek_is_literal(tokens) {
+        let lit = expect_literal(tokens)?;
+        return Ok(quote! { #ctx.literal(#kind_str, #lit) });
+    }
+
+    // Check for (kind $fresh)
+    if peek_is_dollar(tokens) {
+        tokens.next();
+        let name = expect_ident(tokens, "expected fresh variable name after $")?;
+        let name_str = name.to_string();
+        return Ok(quote! { #ctx.fresh(#kind_str, #name_str) });
+    }
+
+    // Parse named fields and bare children
+    let mut stmts = Vec::new();
+    let mut field_args = Vec::new();
+    let mut has_children = false;
+
+    // Named fields — compute each value into a temp, then reference it
+    while peek_is_field(tokens) {
+        let field_name = expect_ident(tokens, "expected field name")?;
+        let field_str = field_name.to_string();
+        expect_punct(tokens, ':', "expected `:` after field name")?;
+        let value = parse_direct_node(tokens, ctx)?;
+        let temp = Ident::new(&format!("__field_{field_str}"), Span::call_site());
+        stmts.push(quote! { let #temp = #value; });
+        field_args.push(quote! { (#field_str, vec![#temp]) });
+    }
+
+    // Bare children (implicit "child" field)
+    let mut child_stmts = Vec::new();
+    while tokens.peek().is_some() {
+        if peek_is_group(tokens, Delimiter::Parenthesis) {
+            let group = expect_group(tokens, Delimiter::Parenthesis)?;
+            let mut inner = group.stream().into_iter().peekable();
+
+            if peek_is_star(tokens) {
+                tokens.next();
+                if peek_is_at(&mut inner) {
+                    inner.next();
+                    let name = expect_ident(&mut inner, "expected capture name")?;
+                    let name_str = name.to_string();
+                    child_stmts.push(quote! {
+                        __children.extend(#ctx.capture_all(#name_str));
+                    });
+                } else {
+                    let node = parse_direct_node_inner(&mut inner, ctx)?;
+                    child_stmts.push(quote! { __children.push(#node); });
+                }
+                has_children = true;
+                continue;
+            }
+
+            let node = parse_direct_node_inner(&mut inner, ctx)?;
+            child_stmts.push(quote! { __children.push(#node); });
+            has_children = true;
+            continue;
+        }
+
+        if peek_is_at(tokens) {
+            let node = parse_direct_node(tokens, ctx)?;
+            child_stmts.push(quote! { __children.push(#node); });
+            has_children = true;
+            continue;
+        }
+
+        if peek_is_group(tokens, Delimiter::Brace) {
+            let group = expect_group(tokens, Delimiter::Brace)?;
+            let expr = group.stream();
+            child_stmts.push(quote! { __children.push(#expr); });
+            has_children = true;
+            continue;
+        }
+
+        break;
+    }
+
+    if !has_children {
+        Ok(quote! {
+            {
+                #(#stmts)*
+                #ctx.node(#kind_str, vec![#(#field_args),*])
+            }
+        })
+    } else {
+        Ok(quote! {
+            {
+                #(#stmts)*
+                let mut __children: Vec<usize> = Vec::new();
+                #(#child_stmts)*
+                #ctx.with_children(#kind_str, vec![#(#field_args),*], __children)
+            }
+        })
+    }
+}
+
+/// Parse the top-level list of a `trees!` template.
+/// Each item is a node template, `(@capture)*` splice, or `{expr}` splice.
+fn parse_direct_list(tokens: &mut Tokens, ctx: &Ident) -> Result<Vec<TokenStream>> {
+    let mut items = Vec::new();
+    while tokens.peek().is_some() {
+        // (@name)* — splice repeated capture
+        if peek_is_group(tokens, Delimiter::Parenthesis) {
+            let group = expect_group(tokens, Delimiter::Parenthesis)?;
+            let mut inner = group.stream().into_iter().peekable();
+
+            if peek_is_star(tokens) {
+                tokens.next();
+                // Inside parens should be @name
+                if peek_is_at(&mut inner) {
+                    inner.next();
+                    let name = expect_ident(&mut inner, "expected capture name")?;
+                    let name_str = name.to_string();
+                    items.push(quote! {
+                        __nodes.extend(#ctx.capture_all(#name_str));
+                    });
+                } else {
+                    return Err(syn::Error::new(Span::call_site(), "expected @capture inside (...)* splice"));
+                }
+                continue;
+            }
+
+            // Regular node
+            let node = parse_direct_node_inner(&mut inner, ctx)?;
+            items.push(quote! { __nodes.push(#node); });
+            continue;
+        }
+
+        // {expr} — splice Vec<Id>
+        if peek_is_group(tokens, Delimiter::Brace) {
+            let group = expect_group(tokens, Delimiter::Brace)?;
+            let expr = group.stream();
+            items.push(quote! { __nodes.extend(#expr); });
+            continue;
+        }
+
+        // @capture — single capture
+        if peek_is_at(tokens) {
+            let node = parse_direct_node(tokens, ctx)?;
+            items.push(quote! { __nodes.push(#node); });
+            continue;
+        }
+
+        break;
+    }
+    Ok(items)
+}
+
+// ---------------------------------------------------------------------------
 // Token utilities
 // ---------------------------------------------------------------------------
 

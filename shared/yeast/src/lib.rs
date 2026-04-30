@@ -5,6 +5,7 @@ extern crate self as yeast;
 use serde::Serialize;
 use serde_json::{json, Value};
 
+pub mod build;
 pub mod captures;
 pub mod cursor;
 pub mod node_types_yaml;
@@ -15,7 +16,7 @@ pub mod rules;
 pub mod tree_builder;
 mod visitor;
 
-pub use yeast_macros::{query, tree_builder, trees_builder};
+pub use yeast_macros::{query, tree, tree_builder, trees, trees_builder};
 
 use captures::Captures;
 pub use cursor::Cursor;
@@ -198,7 +199,7 @@ impl Ast {
         self.print_node(root, source)
     }
 
-    fn create_node(
+    pub fn create_node(
         &mut self,
         kind: KindId,
         content: NodeContent,
@@ -245,7 +246,7 @@ impl Ast {
         }
     }
 
-    fn field_id_for_name(&self, name: &str) -> Option<FieldId> {
+    pub fn field_id_for_name(&self, name: &str) -> Option<FieldId> {
         if name == CHILD_FIELD_NAME {
             Some(CHILD_FIELD)
         } else {
@@ -360,7 +361,7 @@ impl Ast {
         }
     }
 
-    fn id_for_node_kind(&self, kind: &str) -> Option<KindId> {
+    pub fn id_for_node_kind(&self, kind: &str) -> Option<KindId> {
         let id = self.language.id_for_node_kind(kind, true);
         if id == 0 {
             None

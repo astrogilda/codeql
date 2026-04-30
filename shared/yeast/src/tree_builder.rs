@@ -6,7 +6,7 @@ use std::cell::Cell;
 /// All occurrences of the same `$name` within one build share the same generated value.
 pub struct FreshScope {
     counter: Cell<u32>,
-    resolved: std::cell::RefCell<BTreeMap<&'static str, String>>,
+    resolved: std::cell::RefCell<BTreeMap<String, String>>,
 }
 
 impl FreshScope {
@@ -17,10 +17,10 @@ impl FreshScope {
         }
     }
 
-    fn resolve(&self, name: &'static str) -> String {
+    pub fn resolve(&self, name: &str) -> String {
         self.resolved
             .borrow_mut()
-            .entry(name)
+            .entry(name.to_string())
             .or_insert_with(|| {
                 let id = self.counter.get();
                 self.counter.set(id + 1);

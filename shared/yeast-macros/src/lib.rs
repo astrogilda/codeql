@@ -53,3 +53,52 @@ pub fn trees_builder(input: TokenStream) -> TokenStream {
         Err(err) => err.to_compile_error().into(),
     }
 }
+
+/// Build a single AST node from a template, returning its `Id`.
+///
+/// # Syntax
+///
+/// ```text
+/// tree!(ctx,
+///     (kind
+///         field: (child_kind ...)
+///         field: @capture
+///         (identifier "literal_value")
+///         (identifier $fresh_name)
+///         {rust_expression}
+///     )
+/// )
+/// ```
+///
+/// `ctx` must be a `&mut BuildCtx`.
+#[proc_macro]
+pub fn tree(input: TokenStream) -> TokenStream {
+    let input2: TokenStream2 = input.into();
+    match parse::parse_tree_top(input2) {
+        Ok(output) => output.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+/// Build a list of AST nodes from a template, returning `Vec<Id>`.
+///
+/// # Syntax
+///
+/// ```text
+/// trees!(ctx,
+///     (node1 ...)
+///     (node2 ...)
+///     (@capture)*          // splice repeated capture
+///     {rust_expression}    // splice Vec<Id>
+/// )
+/// ```
+///
+/// `ctx` must be a `&mut BuildCtx`.
+#[proc_macro]
+pub fn trees(input: TokenStream) -> TokenStream {
+    let input2: TokenStream2 = input.into();
+    match parse::parse_trees_top(input2) {
+        Ok(output) => output.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}

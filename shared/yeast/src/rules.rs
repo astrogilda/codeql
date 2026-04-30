@@ -1,4 +1,4 @@
-use crate::{captures::Captures, tree_builder::FreshScope, *};
+use crate::{build::BuildCtx, captures::Captures, *};
 
 pub fn rules() -> Vec<Rule> {
     let assign_query = yeast::query!(
@@ -9,50 +9,35 @@ pub fn rules() -> Vec<Rule> {
             right: (_) @right
         )
     );
-    let assign_transform = |ast: &mut Ast, mut match_: Captures| {
-        let fresh = FreshScope::new();
+    let assign_transform = |ast: &mut Ast, match_: Captures| {
+        let left_ids = match_.get_all("left");
+        let mut assigns = Vec::new();
 
-        let tmp_lhs = yeast::tree_builder!((identifier $tmp))
-            .build_tree_with_fresh(ast, &match_, &fresh).unwrap();
-        match_.insert("tmp_lhs", tmp_lhs);
-
-        let mut i = 0;
-        match_.map_captures_to("left", "assigns", &mut |old_id| {
-            let mut local_capture = Captures::new();
-            local_capture.insert("lhs", old_id);
-            local_capture.insert(
-                "tmp",
-                yeast::tree_builder!((identifier $tmp))
-                    .build_tree_with_fresh(ast, &local_capture, &fresh).unwrap(),
-            );
-            let index: i32 = i;
-            i += 1;
-            local_capture.insert(
-                "index",
-                ast.create_named_token("integer", index.to_string()),
-            );
-            yeast::tree_builder!(
+        // Build individual x = tmp[i] assignments
+        let mut ctx = BuildCtx::new(ast, &match_);
+        for (i, &lhs) in left_ids.iter().enumerate() {
+            let tmp = yeast::tree!(ctx, (identifier $tmp));
+            let index = ctx.literal("integer", &i.to_string());
+            let assign = yeast::tree!(ctx,
                 (assignment
-                    left: @lhs
+                    left: {lhs}
                     right: (element_reference
-                        object: @tmp
-                        @index
+                        object: {tmp}
+                        {index}
                     )
                 )
-            )
-            .build_tree_with_fresh(ast, &local_capture, &fresh)
-            .unwrap()
-        });
+            );
+            assigns.push(assign);
+        }
 
-        yeast::trees_builder!(
+        // Build: tmp = rhs, then all the assigns
+        yeast::trees!(ctx,
             (assignment
-                left: @tmp_lhs
+                left: (identifier $tmp)
                 right: @right
             )
-            (@assigns)*
+            {assigns}
         )
-        .build_trees_with_fresh(ast, &match_, &fresh)
-        .unwrap()
     };
 
     let assign_rule = Rule::new(assign_query, Box::new(assign_transform));
@@ -65,7 +50,8 @@ pub fn rules() -> Vec<Rule> {
         )
     );
     let for_transform = |ast: &mut Ast, match_: Captures| {
-        yeast::trees_builder!(
+        let mut ctx = BuildCtx::new(ast, &match_);
+        yeast::trees!(ctx,
             (call
                 receiver: @val
                 method: (identifier "each")
@@ -83,8 +69,6 @@ pub fn rules() -> Vec<Rule> {
                 )
             )
         )
-        .build_trees(ast, &match_)
-        .unwrap()
     };
 
     let for_rule = Rule::new(for_query, Box::new(for_transform));

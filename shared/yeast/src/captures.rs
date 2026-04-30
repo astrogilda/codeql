@@ -37,6 +37,11 @@ impl Captures {
         }
     }
 
+    /// Get all values of a capture variable (for repeated captures).
+    pub fn get_all(&self, key: &str) -> Vec<Id> {
+        self.captures.get(key).cloned().unwrap_or_default()
+    }
+
     pub fn insert(&mut self, key: &'static str, id: Id) {
         self.captures.entry(key).or_default().push(id);
     }
