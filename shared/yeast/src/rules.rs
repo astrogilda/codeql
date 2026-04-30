@@ -13,7 +13,7 @@ pub fn rules() -> Vec<Rule> {
         let fresh = FreshScope::new();
 
         let tmp_lhs = yeast::tree_builder!((identifier $tmp))
-            .build_tree(ast, &match_, &fresh).unwrap();
+            .build_tree_with_fresh(ast, &match_, &fresh).unwrap();
         match_.insert("tmp_lhs", tmp_lhs);
 
         let mut i = 0;
@@ -23,7 +23,7 @@ pub fn rules() -> Vec<Rule> {
             local_capture.insert(
                 "tmp",
                 yeast::tree_builder!((identifier $tmp))
-                    .build_tree(ast, &local_capture, &fresh).unwrap(),
+                    .build_tree_with_fresh(ast, &local_capture, &fresh).unwrap(),
             );
             let index: i32 = i;
             i += 1;
@@ -40,7 +40,7 @@ pub fn rules() -> Vec<Rule> {
                     )
                 )
             )
-            .build_tree(ast, &local_capture, &fresh)
+            .build_tree_with_fresh(ast, &local_capture, &fresh)
             .unwrap()
         });
 
@@ -51,7 +51,7 @@ pub fn rules() -> Vec<Rule> {
             )
             (@assigns)*
         )
-        .build_trees(ast, &match_, &fresh)
+        .build_trees_with_fresh(ast, &match_, &fresh)
         .unwrap()
     };
 
@@ -65,7 +65,6 @@ pub fn rules() -> Vec<Rule> {
         )
     );
     let for_transform = |ast: &mut Ast, match_: Captures| {
-        let fresh = FreshScope::new();
         yeast::trees_builder!(
             (call
                 receiver: @val
@@ -84,7 +83,7 @@ pub fn rules() -> Vec<Rule> {
                 )
             )
         )
-        .build_trees(ast, &match_, &fresh)
+        .build_trees(ast, &match_)
         .unwrap()
     };
 

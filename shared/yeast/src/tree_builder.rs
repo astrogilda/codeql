@@ -79,12 +79,12 @@ impl TreeChildBuilder {
                 let repeated_ids = self.get_opt_contained();
 
                 for sub_captures in vars.un_star(&repeated_ids)? {
-                    child_ids.push(child.build_tree(target, &sub_captures, fresh)?)
+                    child_ids.push(child.build_tree_with_fresh(target, &sub_captures, fresh)?)
                 }
                 Ok(())
             }
             TreeChildBuilder::SingleNode(node) => {
-                child_ids.push(node.build_tree(target, vars, fresh)?);
+                child_ids.push(node.build_tree_with_fresh(target, vars, fresh)?);
                 Ok(())
             }
         }
@@ -112,7 +112,11 @@ impl TreeBuilder {
         }
     }
 
-    pub fn build_tree(&self, target: &mut Ast, vars: &Captures, fresh: &FreshScope) -> Result<Id, String> {
+    pub fn build_tree(&self, target: &mut Ast, vars: &Captures) -> Result<Id, String> {
+        self.build_tree_with_fresh(target, vars, &FreshScope::new())
+    }
+
+    pub fn build_tree_with_fresh(&self, target: &mut Ast, vars: &Captures, fresh: &FreshScope) -> Result<Id, String> {
         match self {
             TreeBuilder::Capture { capture } => vars.get_var(capture),
             TreeBuilder::Literal { kind, value } => {
@@ -148,7 +152,11 @@ pub struct TreesBuilder {
 }
 
 impl TreesBuilder {
-    pub fn build_trees(&self, target: &mut Ast, vars: &Captures, fresh: &FreshScope) -> Result<Vec<Id>, String> {
+    pub fn build_trees(&self, target: &mut Ast, vars: &Captures) -> Result<Vec<Id>, String> {
+        self.build_trees_with_fresh(target, vars, &FreshScope::new())
+    }
+
+    pub fn build_trees_with_fresh(&self, target: &mut Ast, vars: &Captures, fresh: &FreshScope) -> Result<Vec<Id>, String> {
         let mut child_ids = Vec::new();
         for child in &self.children {
             child.build_tree(target, vars, fresh, &mut child_ids)?;

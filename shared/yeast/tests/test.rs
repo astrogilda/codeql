@@ -99,8 +99,7 @@ fn test_query_input() {
         )
     );
 
-    let fresh = yeast::tree_builder::FreshScope::new();
-    let new_id = builder.build_tree(&mut ast, &matches, &fresh).unwrap();
+    let new_id = builder.build_tree(&mut ast, &matches).unwrap();
 
     let rewritten_actual = serde_json::to_string_pretty(&ast.print(&input, new_id)).unwrap();
 
