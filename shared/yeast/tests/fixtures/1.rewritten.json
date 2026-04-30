@@ -32,11 +32,6 @@
               }
             }
           ],
-          "rest": [
-            {
-              "=": "="
-            }
-          ],
           "right": [
             {
               "left_assignment_list": {

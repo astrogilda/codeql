@@ -76,7 +76,6 @@ fn test_query_input() {
             child: (assignment
                 left: @left
                 right: @right
-                (@rest)*
             )
         )
     );
@@ -94,7 +93,6 @@ fn test_query_input() {
             child: (assignment
                 left: @right
                 right: @left
-                (@rest)*
             )
         )
     );

@@ -31,6 +31,18 @@ pub enum Rep {
 }
 
 impl QueryNode {
+    /// Returns true if this query only matches named nodes (not unnamed tokens).
+    /// Used to skip unnamed children in positional matching, matching tree-sitter
+    /// semantics where `(_)` only matches named nodes.
+    fn matches_named_only(&self) -> bool {
+        match self {
+            QueryNode::Any() => true,
+            QueryNode::Node { .. } => true,
+            QueryNode::UnnamedNode { .. } => false,
+            QueryNode::Capture { node, .. } => node.matches_named_only(),
+        }
+    }
+
     pub fn do_match(&self, ast: &Ast, node: Id, matches: &mut Captures) -> Result<bool, String> {
         match self {
             QueryNode::Any() => Ok(true),
@@ -124,7 +136,22 @@ impl QueryListElem {
                 }
             }
             QueryListElem::SingleNode(sub_query) => {
-                if let Some(child) = remaining_children.next() {
+                if sub_query.matches_named_only() {
+                    // Skip unnamed children, matching tree-sitter semantics
+                    // where (_) only matches named nodes.
+                    loop {
+                        match remaining_children.next() {
+                            Some(child) => {
+                                let node = ast.get_node(child).unwrap();
+                                if node.is_named() {
+                                    return sub_query.do_match(ast, child, matches);
+                                }
+                                // Skip unnamed child, continue to next
+                            }
+                            None => return Ok(false),
+                        }
+                    }
+                } else if let Some(child) = remaining_children.next() {
                     sub_query.do_match(ast, child, matches)
                 } else {
                     Ok(false)

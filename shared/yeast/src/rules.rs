@@ -60,7 +60,7 @@ pub fn rules() -> Vec<Rule> {
     let for_query = yeast::query!(
         (for
             pattern: @pat
-            value: (in "in" @val)
+            value: (in (_) @val)
             body: (do "do"? (@body)*)
         )
     );
