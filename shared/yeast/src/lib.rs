@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 
 pub mod captures;
 pub mod cursor;
+pub mod node_types_yaml;
 pub mod print;
 pub mod query;
 mod range;
