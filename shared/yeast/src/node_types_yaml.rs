@@ -370,7 +370,7 @@ pub fn convert_from_json(json_input: &str) -> Result<String, String> {
     if !unnamed.is_empty() {
         writeln!(out, "unnamed:").unwrap();
         for name in &unnamed {
-            writeln!(out, "  - {}", quote_yaml(name)).unwrap();
+            writeln!(out, "  - {}", force_quote(name)).unwrap();
         }
     }
 
@@ -396,19 +396,21 @@ fn format_type_ref(
     _all_unnamed: &BTreeSet<String>,
 ) -> String {
     if named {
-        // Named reference — always unambiguous as a plain string
-        // (ambiguous names default to named)
         quote_yaml(kind)
     } else {
         let is_also_named = all_named.contains(kind);
         if is_also_named {
-            // Ambiguous: must use explicit {unnamed: name}
-            format!("{{unnamed: {}}}", quote_yaml(kind))
+            format!("{{unnamed: {}}}", force_quote(kind))
         } else {
-            // Only exists as unnamed — plain string is fine
-            quote_yaml(kind)
+            force_quote(kind)
         }
     }
+}
+
+/// Always wrap in double quotes. Used for unnamed node references so they're
+/// visually distinct from named ones — YAML treats both forms as equivalent strings.
+fn force_quote(s: &str) -> String {
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// Quote a YAML string value if it contains special characters or could be
