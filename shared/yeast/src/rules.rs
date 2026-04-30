@@ -89,8 +89,5 @@ pub fn rules() -> Vec<Rule> {
 
     let for_rule = Rule::new(for_query, Box::new(for_transform));
 
-    let end_query = yeast::query!(("end"));
-    let end_transform = |_ast: &mut Ast, _match: Captures| vec![];
-    let end_rule = Rule::new(end_query, Box::new(end_transform));
-    vec![assign_rule, for_rule, end_rule]
+    vec![assign_rule, for_rule]
 }
