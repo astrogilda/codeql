@@ -404,29 +404,30 @@ fn parse_builder_child_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
 // tree! / trees! parsing — direct code generation against BuildCtx
 // ---------------------------------------------------------------------------
 
-/// Parse `tree!(ctx, (template))` — first arg is context ident, then a comma,
-/// then a single node template.
+/// Parse `tree!(ctx, template)` — unified macro that returns `Id` for a single
+/// top-level element or `Vec<Id>` for multiple elements.
 pub fn parse_tree_top(input: TokenStream) -> Result<TokenStream> {
     let mut tokens = input.into_iter().peekable();
     let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
     expect_punct(&mut tokens, ',', "expected `,` after context")?;
-    let body = parse_direct_node(&mut tokens, &ctx)?;
+
+    // Parse the first element
+    let first = parse_direct_node(&mut tokens, &ctx)?;
+
+    // If nothing follows, return a single Id
+    if tokens.peek().is_none() {
+        return Ok(quote! { { #first } });
+    }
+
+    // Multiple elements — collect into Vec<Id>
+    let mut items = vec![quote! { __nodes.push(#first); }];
+    let rest = parse_direct_list(&mut tokens, &ctx)?;
+    items.extend(rest);
+
     if let Some(tok) = tokens.next() {
         return Err(syn::Error::new_spanned(tok, "unexpected token after tree! template"));
     }
-    Ok(quote! { { #body } })
-}
 
-/// Parse `trees!(ctx, (node1) (node2) {expr} ...)` — context ident, comma,
-/// then a list of node templates / embedded expressions.
-pub fn parse_trees_top(input: TokenStream) -> Result<TokenStream> {
-    let mut tokens = input.into_iter().peekable();
-    let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
-    expect_punct(&mut tokens, ',', "expected `,` after context")?;
-    let items = parse_direct_list(&mut tokens, &ctx)?;
-    if let Some(tok) = tokens.next() {
-        return Err(syn::Error::new_spanned(tok, "unexpected token after trees! template"));
-    }
     Ok(quote! {
         {
             let mut __nodes: Vec<usize> = Vec::new();
@@ -434,6 +435,11 @@ pub fn parse_trees_top(input: TokenStream) -> Result<TokenStream> {
             __nodes
         }
     })
+}
+
+/// Kept for backward compatibility — identical to `parse_tree_top`.
+pub fn parse_trees_top(input: TokenStream) -> Result<TokenStream> {
+    parse_tree_top(input)
 }
 
 /// Parse a single node template and generate code that returns an `Id`.
