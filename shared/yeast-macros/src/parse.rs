@@ -411,18 +411,14 @@ pub fn parse_tree_top(input: TokenStream) -> Result<TokenStream> {
     let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
     expect_punct(&mut tokens, ',', "expected `,` after context")?;
 
-    // Parse the first element
+    // Parse all elements into a list
     let first = parse_direct_node(&mut tokens, &ctx)?;
-
-    // If nothing follows, return a single Id
-    if tokens.peek().is_none() {
-        return Ok(quote! { { #first } });
-    }
-
-    // Multiple elements — collect into Vec<Id>
     let mut items = vec![quote! { __nodes.push(#first); }];
-    let rest = parse_direct_list(&mut tokens, &ctx)?;
-    items.extend(rest);
+
+    if tokens.peek().is_some() {
+        let rest = parse_direct_list(&mut tokens, &ctx)?;
+        items.extend(rest);
+    }
 
     if let Some(tok) = tokens.next() {
         return Err(syn::Error::new_spanned(tok, "unexpected token after tree! template"));
