@@ -4,17 +4,21 @@ use std::io::Read;
 #[derive(Parser)]
 #[clap(
     name = "node-types-yaml",
-    about = "Convert a YAML node-types file to tree-sitter node-types.json"
+    about = "Convert between YAML and JSON node-types formats"
 )]
 struct Cli {
-    /// Input YAML file (reads from stdin if not provided)
+    /// Input file (reads from stdin if not provided)
     input: Option<String>,
+
+    /// Convert from JSON to YAML (default is YAML to JSON)
+    #[arg(long)]
+    from_json: bool,
 }
 
 fn main() {
     let args = Cli::parse();
 
-    let yaml = match &args.input {
+    let input = match &args.input {
         Some(path) => std::fs::read_to_string(path).unwrap_or_else(|e| {
             eprintln!("Error reading {path}: {e}");
             std::process::exit(1);
@@ -29,8 +33,14 @@ fn main() {
         }
     };
 
-    match yeast::node_types_yaml::convert(&yaml) {
-        Ok(json) => println!("{json}"),
+    let result = if args.from_json {
+        yeast::node_types_yaml::convert_from_json(&input)
+    } else {
+        yeast::node_types_yaml::convert(&input)
+    };
+
+    match result {
+        Ok(output) => print!("{output}"),
         Err(e) => {
             eprintln!("Error: {e}");
             std::process::exit(1);
