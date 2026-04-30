@@ -127,36 +127,72 @@ children. Named node patterns like `(_)` automatically skip unnamed tokens
 (identifier)* @names   // capture each repeated match
 ```
 
-## Builder language
+## Template language
 
-Builders construct new AST nodes from captures. They use a similar syntax
-inside `yeast::tree_builder!()` and `yeast::trees_builder!()`.
+Templates construct new AST nodes using the `tree!` and `trees!` macros.
+Both take a `BuildCtx` as their first argument, which holds the AST,
+captures from the query match, and a fresh identifier scope.
+
+```rust
+let mut ctx = BuildCtx::new(ast, &captures);
+```
+
+### `tree!` — build a single node
+
+`tree!(ctx, ...)` returns a single node `Id`:
+
+```rust
+let id = yeast::tree!(ctx,
+    (assignment
+        left: @lhs
+        right: @rhs
+    )
+);
+```
+
+### `trees!` — build multiple nodes
+
+`trees!(ctx, ...)` returns `Vec<Id>`:
+
+```rust
+let ids = yeast::trees!(ctx,
+    (assignment left: @tmp right: @right)
+    (@body)*
+);
+```
 
 ### Capture references
 
-In builders, `@name` references a captured value from the query match:
+`@name` references a captured value from the query match:
 
 ```rust
-yeast::tree_builder!(
-    (assignment
-        left: @rhs       // insert the captured @rhs node as the left child
-        right: @lhs       // insert the captured @lhs node as the right child
-    )
+(assignment
+    left: @rhs       // insert the captured @rhs node as the left child
+    right: @lhs       // insert the captured @lhs node as the right child
 )
 ```
 
 ### Literal nodes
 
-Create a leaf node with a fixed text content:
+`(kind "text")` creates a leaf node with fixed text content:
 
 ```rust
 (identifier "each")          // an identifier node whose text is "each"
 ```
 
+### Computed literals
+
+`(kind #{expr})` creates a leaf node whose content is `expr.to_string()`:
+
+```rust
+(integer #{i})               // an integer node with the value of i
+(identifier #{name})         // an identifier from a Rust variable
+```
+
 ### Fresh identifiers
 
-Create a leaf node with an auto-generated unique name. All occurrences of the
-same `$name` within one rule application share the same generated value:
+`(kind $name)` creates a leaf node with an auto-generated unique name. All
+occurrences of the same `$name` within one `BuildCtx` share the same value:
 
 ```rust
 (block
@@ -172,18 +208,34 @@ same `$name` within one rule application share the same generated value:
 )
 ```
 
-Use `build_tree_with_fresh()` / `build_trees_with_fresh()` when you need the
-same fresh scope across multiple `build_tree` calls.
+### Embedded Rust expressions
 
-### Repeated splicing
-
-In `trees_builder!()`, `(@captures)*` splices a repeated capture into the
-output, expanding once per captured value:
+`{expr}` embeds a Rust expression that returns a single node `Id`:
 
 ```rust
-yeast::trees_builder!(
+(assignment
+    left: {some_node_id}       // insert a pre-built node
+    right: @rhs
+)
+```
+
+`{..expr}` splices a `Vec<Id>` (or any iterable of `Id`):
+
+```rust
+yeast::trees!(ctx,
     (assignment left: @tmp right: @right)
-    (@assigns)*                           // one node per captured assign
+    {..extra_nodes}                        // splice a Vec<Id>
+)
+```
+
+### Repeated capture splicing
+
+`(@name)*` splices a repeated capture, inserting one node per captured value:
+
+```rust
+yeast::trees!(ctx,
+    (first_node ...)
+    (@body)*              // one node per captured @body value
 )
 ```
 
@@ -193,7 +245,6 @@ This rule rewrites Ruby's `for pat in val do body end` into
 `val.each { |tmp| pat = tmp; body }`:
 
 ```rust
-// Query: match for-loops
 let query = yeast::query!(
     (for
         pattern: (_) @pat
@@ -202,9 +253,9 @@ let query = yeast::query!(
     )
 );
 
-// Transform: build the .each block form
 let transform = |ast: &mut Ast, match_: Captures| {
-    yeast::trees_builder!(
+    let mut ctx = BuildCtx::new(ast, &match_);
+    vec![yeast::tree!(ctx,
         (call
             receiver: @val
             method: (identifier "each")
@@ -221,9 +272,7 @@ let transform = |ast: &mut Ast, match_: Captures| {
                 )
             )
         )
-    )
-    .build_trees(ast, &match_)
-    .unwrap()
+    )]
 };
 
 let rule = Rule::new(query, Box::new(transform));
