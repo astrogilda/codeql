@@ -473,8 +473,9 @@ fn parse_direct_node_inner(tokens: &mut Tokens, ctx: &Ident) -> Result<TokenStre
         return Ok(quote! { #ctx.literal(#kind_str, #lit) });
     }
 
-    // Check for (kind {expr}) — computed literal, expr converted via .to_string()
-    if peek_is_group(tokens, Delimiter::Brace) {
+    // Check for (kind #{expr}) — computed literal, expr converted via .to_string()
+    if peek_is_hash(tokens) {
+        tokens.next(); // consume #
         let group = expect_group(tokens, Delimiter::Brace)?;
         let expr = group.stream();
         return Ok(quote! { #ctx.literal(#kind_str, &(#expr).to_string()) });
@@ -641,6 +642,10 @@ fn peek_is_literal(tokens: &mut Tokens) -> bool {
 
 fn peek_is_dollar(tokens: &mut Tokens) -> bool {
     matches!(tokens.peek(), Some(TokenTree::Punct(p)) if p.as_char() == '$')
+}
+
+fn peek_is_hash(tokens: &mut Tokens) -> bool {
+    matches!(tokens.peek(), Some(TokenTree::Punct(p)) if p.as_char() == '#')
 }
 
 fn peek_is_underscore(tokens: &mut Tokens) -> bool {

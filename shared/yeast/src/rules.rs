@@ -21,7 +21,7 @@ pub fn rules() -> Vec<Rule> {
                     left: {lhs}
                     right: (element_reference
                         object: (identifier $tmp)
-                        (integer {i})
+                        (integer #{i})
                     )
                 )
             );
