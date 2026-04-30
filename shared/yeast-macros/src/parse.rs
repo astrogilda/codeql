@@ -143,16 +143,32 @@ fn parse_query_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
             // Check for repetition after the group
             if peek_is_repetition(tokens) {
                 let rep = expect_repetition(tokens)?;
-                let sub_elems = parse_query_list(&mut inner)?;
-                // Check for @capture after the repetition
-                let elem = quote! {
-                    yeast::query::QueryListElem::Repeated {
-                        children: vec![#(#sub_elems),*],
-                        rep: #rep,
-                    }
-                };
-                let elem = maybe_wrap_list_capture(tokens, elem)?;
-                elems.push(elem);
+                // Determine if the group is a single node pattern or a list
+                // of patterns. If it starts with an identifier (node kind) or
+                // `_`, treat it as a single repeated node. Otherwise, parse
+                // as a repeated list of sub-patterns.
+                let is_single_node = matches!(inner.peek(), Some(TokenTree::Ident(_)));
+                if is_single_node {
+                    let node = parse_query_node_inner(&mut inner)?;
+                    let elem = quote! {
+                        yeast::query::QueryListElem::Repeated {
+                            children: vec![yeast::query::QueryListElem::SingleNode(#node)],
+                            rep: #rep,
+                        }
+                    };
+                    let elem = maybe_wrap_list_capture(tokens, elem)?;
+                    elems.push(elem);
+                } else {
+                    let sub_elems = parse_query_list(&mut inner)?;
+                    let elem = quote! {
+                        yeast::query::QueryListElem::Repeated {
+                            children: vec![#(#sub_elems),*],
+                            rep: #rep,
+                        }
+                    };
+                    let elem = maybe_wrap_list_capture(tokens, elem)?;
+                    elems.push(elem);
+                }
             } else {
                 // Single parenthesized node, possibly followed by @capture
                 let node = parse_query_node_inner(&mut inner)?;
