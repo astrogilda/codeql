@@ -11,30 +11,24 @@ pub fn rules() -> Vec<Rule> {
     );
     let assign_transform = |ast: &mut Ast, match_: Captures| {
         let left_ids = match_.get_all("left");
-        let mut assigns = Vec::new();
-
-        // Build individual x = tmp[i] assignments
         let mut ctx = BuildCtx::new(ast, &match_);
-        for (i, &lhs) in left_ids.iter().enumerate() {
-            let assign = yeast::tree!(ctx,
-                (assignment
-                    left: {lhs}
-                    right: (element_reference
-                        object: (identifier $tmp)
-                        (integer #{i})
-                    )
-                )
-            );
-            assigns.push(assign);
-        }
 
-        // Build: tmp = rhs, then all the assigns
         yeast::trees!(ctx,
             (assignment
                 left: (identifier $tmp)
                 right: @right
             )
-            {assigns}
+            {..left_ids.iter().enumerate().map(|(i, &lhs)| {
+                yeast::tree!(ctx,
+                    (assignment
+                        left: {lhs}
+                        right: (element_reference
+                            object: (identifier $tmp)
+                            (integer #{i})
+                        )
+                    )
+                )
+            }).collect::<Vec<_>>()}
         )
     };
 

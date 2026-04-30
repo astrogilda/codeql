@@ -544,8 +544,16 @@ fn parse_direct_node_inner(tokens: &mut Tokens, ctx: &Ident) -> Result<TokenStre
 
         if peek_is_group(tokens, Delimiter::Brace) {
             let group = expect_group(tokens, Delimiter::Brace)?;
-            let expr = group.stream();
-            child_stmts.push(quote! { __children.push(#expr); });
+            let mut inner = group.stream().into_iter().peekable();
+            if peek_is_dotdot(&mut inner) {
+                inner.next();
+                inner.next();
+                let expr: TokenStream = inner.collect();
+                child_stmts.push(quote! { __children.extend(#expr); });
+            } else {
+                let expr = group.stream();
+                child_stmts.push(quote! { __children.push(#expr); });
+            }
             has_children = true;
             continue;
         }
@@ -604,11 +612,19 @@ fn parse_direct_list(tokens: &mut Tokens, ctx: &Ident) -> Result<Vec<TokenStream
             continue;
         }
 
-        // {expr} — splice Vec<Id>
+        // {expr} or {..expr} — single node or splice
         if peek_is_group(tokens, Delimiter::Brace) {
             let group = expect_group(tokens, Delimiter::Brace)?;
-            let expr = group.stream();
-            items.push(quote! { __nodes.extend(#expr); });
+            let mut inner = group.stream().into_iter().peekable();
+            if peek_is_dotdot(&mut inner) {
+                inner.next(); // consume first .
+                inner.next(); // consume second .
+                let expr: TokenStream = inner.collect();
+                items.push(quote! { __nodes.extend(#expr); });
+            } else {
+                let expr = group.stream();
+                items.push(quote! { __nodes.push(#expr); });
+            }
             continue;
         }
 
@@ -646,6 +662,13 @@ fn peek_is_dollar(tokens: &mut Tokens) -> bool {
 
 fn peek_is_hash(tokens: &mut Tokens) -> bool {
     matches!(tokens.peek(), Some(TokenTree::Punct(p)) if p.as_char() == '#')
+}
+
+/// Check for `..` (two consecutive dot punctuation tokens).
+fn peek_is_dotdot(tokens: &Tokens) -> bool {
+    let mut lookahead = tokens.clone();
+    matches!(lookahead.next(), Some(TokenTree::Punct(p)) if p.as_char() == '.')
+        && matches!(lookahead.next(), Some(TokenTree::Punct(p)) if p.as_char() == '.')
 }
 
 fn peek_is_underscore(tokens: &mut Tokens) -> bool {
