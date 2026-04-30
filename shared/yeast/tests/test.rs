@@ -74,8 +74,8 @@ fn test_query_input() {
     let query = yeast::query!(
         (program
             child: (assignment
-                left: @left
-                right: @right
+                left: (_) @left
+                right: (_) @right
             )
         )
     );

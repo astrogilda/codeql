@@ -38,22 +38,11 @@ fn parse_query_node(tokens: &mut Tokens) -> Result<TokenStream> {
     }
 }
 
-/// Parse a query atom: `_`, `"literal"`, `@capture`, or `(kind fields...)`.
+/// Parse a query atom: `(kind fields...)` or `(kind fields... bare_children...)`.
+/// Does not handle `@capture` — that's handled by the caller as a postfix.
 fn parse_query_atom(tokens: &mut Tokens) -> Result<TokenStream> {
     match tokens.peek() {
         None => Err(syn::Error::new(Span::call_site(), "unexpected end of query")),
-        Some(TokenTree::Punct(p)) if p.as_char() == '@' => {
-            // @capture shorthand (implicit wildcard)
-            tokens.next(); // consume @
-            let capture_name = expect_ident(tokens, "expected capture name after @")?;
-            let name_str = capture_name.to_string();
-            Ok(quote! {
-                yeast::query::QueryNode::Capture {
-                    capture: #name_str,
-                    node: Box::new(yeast::query::QueryNode::Any()),
-                }
-            })
-        }
         Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => {
             let group = expect_group(tokens, Delimiter::Parenthesis)?;
             let mut inner = group.stream().into_iter().peekable();
@@ -61,7 +50,7 @@ fn parse_query_atom(tokens: &mut Tokens) -> Result<TokenStream> {
         }
         Some(tok) => Err(syn::Error::new_spanned(
             tok.clone(),
-            "expected `(`, `@`, or `_` in query",
+            "expected `(` in query; use `(_) @name` to capture a wildcard",
         )),
     }
 }
@@ -89,14 +78,9 @@ fn parse_query_node_inner(tokens: &mut Tokens) -> Result<TokenStream> {
                 }
             })
         }
-        Some(TokenTree::Punct(p)) if p.as_char() == '@' => {
-            // (@capture) inside parens — just delegate
-            let node = parse_query_atom(tokens)?;
-            Ok(node)
-        }
         Some(tok) => Err(syn::Error::new_spanned(
             tok.clone(),
-            "expected node kind, `_`, `@`, or string literal",
+            "expected node kind, `_`, or string literal",
         )),
     }
 }
@@ -151,17 +135,6 @@ fn parse_query_fields(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
 fn parse_query_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
     let mut elems = Vec::new();
     while tokens.peek().is_some() {
-        // Check for @capture
-        if peek_is_at(tokens) {
-            let node = parse_query_atom(tokens)?;
-            // Check for repetition
-            let elem = maybe_wrap_repetition(tokens, quote! {
-                yeast::query::QueryListElem::SingleNode(#node)
-            })?;
-            elems.push(elem);
-            continue;
-        }
-
         // Check for parenthesized group
         if peek_is_group(tokens, Delimiter::Parenthesis) {
             let group = expect_group(tokens, Delimiter::Parenthesis)?;
@@ -169,19 +142,20 @@ fn parse_query_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
 
             // Check for repetition after the group
             if peek_is_repetition(tokens) {
-                // This is a repeated subsequence: (patterns)* or (patterns)+ or (patterns)?
                 let rep = expect_repetition(tokens)?;
                 let sub_elems = parse_query_list(&mut inner)?;
-                elems.push(quote! {
+                // Check for @capture after the repetition
+                let elem = quote! {
                     yeast::query::QueryListElem::Repeated {
                         children: vec![#(#sub_elems),*],
                         rep: #rep,
                     }
-                });
+                };
+                let elem = maybe_wrap_list_capture(tokens, elem)?;
+                elems.push(elem);
             } else {
-                // This is a single parenthesized node
+                // Single parenthesized node, possibly followed by @capture
                 let node = parse_query_node_inner(&mut inner)?;
-                // Check for @capture after
                 let node = maybe_wrap_capture(tokens, node)?;
                 elems.push(quote! {
                     yeast::query::QueryListElem::SingleNode(#node)
@@ -201,14 +175,15 @@ fn parse_query_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
             continue;
         }
 
-        // Check for _ (wildcard)
+        // Check for bare _ (wildcard), possibly followed by @capture
         if peek_is_underscore(tokens) {
             tokens.next();
             let node = quote! { yeast::query::QueryNode::Any() };
             let node = maybe_wrap_capture(tokens, node)?;
-            elems.push(quote! {
+            let elem = maybe_wrap_repetition(tokens, quote! {
                 yeast::query::QueryListElem::SingleNode(#node)
-            });
+            })?;
+            elems.push(elem);
             continue;
         }
 
@@ -529,5 +504,51 @@ fn maybe_wrap_repetition(tokens: &mut Tokens, single: TokenStream) -> Result<Tok
         })
     } else {
         Ok(single)
+    }
+}
+
+/// If `@name` follows a Repeated list element, wrap each child SingleNode
+/// inside the repetition with a Capture. This matches tree-sitter semantics
+/// where `(_)* @name` captures each matched node.
+fn maybe_wrap_list_capture(tokens: &mut Tokens, elem: TokenStream) -> Result<TokenStream> {
+    if peek_is_at(tokens) {
+        tokens.next();
+        let name = expect_ident(tokens, "expected capture name after @")?;
+        let name_str = name.to_string();
+        // Re-parse the element isn't practical, so we generate a wrapper
+        // that creates a new Repeated with each child wrapped in a capture.
+        // The simplest approach: generate code that the runtime can interpret.
+        // Actually, the capture annotation on repeated elements is best handled
+        // by re-generating the Repeated with captures injected.
+        // For now, assume the common case: the repetition contains a single
+        // SingleNode child, and we wrap that node in a capture.
+        Ok(quote! {
+            {
+                let __rep = #elem;
+                match __rep {
+                    yeast::query::QueryListElem::Repeated { children, rep } => {
+                        yeast::query::QueryListElem::Repeated {
+                            children: children.into_iter().map(|child| {
+                                match child {
+                                    yeast::query::QueryListElem::SingleNode(node) => {
+                                        yeast::query::QueryListElem::SingleNode(
+                                            yeast::query::QueryNode::Capture {
+                                                capture: #name_str,
+                                                node: Box::new(node),
+                                            }
+                                        )
+                                    }
+                                    other => other,
+                                }
+                            }).collect(),
+                            rep,
+                        }
+                    }
+                    other => other,
+                }
+            }
+        })
+    } else {
+        Ok(elem)
     }
 }

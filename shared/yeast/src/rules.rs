@@ -6,7 +6,7 @@ pub fn rules() -> Vec<Rule> {
             left: (left_assignment_list
                 ((identifier) @left (",")?)*
             )
-            right: @right
+            right: (_) @right
         )
     );
     let assign_transform = |ast: &mut Ast, mut match_: Captures| {
@@ -59,9 +59,9 @@ pub fn rules() -> Vec<Rule> {
 
     let for_query = yeast::query!(
         (for
-            pattern: @pat
+            pattern: (_) @pat
             value: (in (_) @val)
-            body: (do "do"? (@body)*)
+            body: (do "do"? (_)* @body)
         )
     );
     let for_transform = |ast: &mut Ast, match_: Captures| {
