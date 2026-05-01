@@ -182,3 +182,15 @@ fn test_shorthand_rule() {
     assert!(output.contains("\"method\""));
     assert!(output.contains("\"receiver\""));
 }
+
+#[test]
+fn test_dump_ast() {
+    let input = "x, y = foo()";
+    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
+    let ast = runner.run(input);
+    let output = yeast::dump::dump_ast(&ast, ast.get_root(), input);
+    println!("{}", output);
+    assert!(output.contains("program"));
+    assert!(output.contains("assignment"));
+    assert!(output.contains("identifier"));
+}

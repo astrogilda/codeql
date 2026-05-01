@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 pub mod build;
 pub mod captures;
 pub mod cursor;
+pub mod dump;
 pub mod node_types_yaml;
 pub mod print;
 pub mod query;
@@ -238,7 +239,7 @@ impl Ast {
         id
     }
 
-    fn field_name_for_id(&self, id: FieldId) -> Option<&'static str> {
+    pub fn field_name_for_id(&self, id: FieldId) -> Option<&'static str> {
         if id == CHILD_FIELD {
             Some(CHILD_FIELD_NAME)
         } else {
@@ -386,8 +387,8 @@ pub struct Node {
     id: Id,
     kind: KindId,
     kind_name: &'static str,
-    fields: BTreeMap<FieldId, Vec<Id>>,
-    content: NodeContent,
+    pub(crate) fields: BTreeMap<FieldId, Vec<Id>>,
+    pub(crate) content: NodeContent,
     is_named: bool,
     is_missing: bool,
     is_extra: bool,
@@ -400,6 +401,10 @@ impl Node {
     }
 
     pub fn kind(&self) -> &'static str {
+        self.kind_name
+    }
+
+    pub fn kind_name(&self) -> &'static str {
         self.kind_name
     }
 
