@@ -95,31 +95,16 @@ fn parse_query_node_inner(tokens: &mut Tokens) -> Result<TokenStream> {
 fn parse_query_fields(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
     let mut fields = Vec::new();
     while tokens.peek().is_some() {
-        // Try to parse a named field: `ident :` or `ident * :`
         if peek_is_field(tokens) {
             let field_name = expect_ident(tokens, "expected field name")?;
             let field_str = field_name.to_string();
 
-            let is_list = peek_is_star(tokens);
-            if is_list {
-                tokens.next(); // consume *
-            }
-
             expect_punct(tokens, ':', "expected `:` after field name")?;
 
-            if is_list {
-                let group = expect_group(tokens, Delimiter::Parenthesis)?;
-                let mut inner = group.stream().into_iter().peekable();
-                let elems = parse_query_list(&mut inner)?;
-                fields.push(quote! {
-                    (#field_str, vec![#(#elems),*])
-                });
-            } else {
-                let child = parse_query_node(tokens)?;
-                fields.push(quote! {
-                    (#field_str, vec![yeast::query::QueryListElem::SingleNode(#child)])
-                });
-            }
+            let child = parse_query_node(tokens)?;
+            fields.push(quote! {
+                (#field_str, vec![yeast::query::QueryListElem::SingleNode(#child)])
+            });
         } else {
             // Bare patterns — collect as implicit `child` field
             let elems = parse_query_list(tokens)?;
@@ -134,7 +119,7 @@ fn parse_query_fields(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
     Ok(fields)
 }
 
-/// Parse a list of query elements (inside a `child*:` field).
+/// Parse a list of query elements (bare children).
 /// Each element is a node pattern, possibly followed by `*`, `+`, `?`.
 fn parse_query_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
     let mut elems = Vec::new();

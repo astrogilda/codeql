@@ -197,17 +197,7 @@ mod tests {
             )
         );
         println!("{:?}", query8);
-        let query9: QueryNode = yeast::query!(
-            (assignment
-                left: (element_reference
-                    object*: ((_) @obj)
-                    (_) @index
-                )
-                right: (_) @rhs
-            )
-        );
-        println!("{:?}", query9);
-        let query10 = yeast::query!(
+        let query9 = yeast::query!(
             (program
                 child: (assignment
                     left: (_) @left
@@ -215,6 +205,6 @@ mod tests {
                 )
             )
         );
-        println!("{:?}", query10);
+        println!("{:?}", query9);
     }
 }
