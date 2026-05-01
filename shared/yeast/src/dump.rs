@@ -100,10 +100,14 @@ fn dump_node(ast: &Ast, id: usize, source: &str, options: &DumpOptions, indent: 
         }
     }
 
-    // Unnamed children
+    // Unnamed children — skip unnamed tokens (keywords, punctuation)
     if let Some(children) = node.fields.get(&CHILD_FIELD) {
         for &child_id in children {
-            dump_node(ast, child_id, source, options, indent + 1, out);
+            if let Some(child) = ast.get_node(child_id) {
+                if child.is_named() {
+                    dump_node(ast, child_id, source, options, indent + 1, out);
+                }
+            }
         }
     }
 }
