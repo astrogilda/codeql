@@ -558,11 +558,42 @@ impl Rule {
 
 const MAX_REWRITE_DEPTH: usize = 100;
 
-fn apply_rules(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope) -> Result<Vec<Id>, String> {
-    apply_rules_inner(rules, ast, id, fresh, 0)
+/// Index of rules by their root query kind for fast lookup.
+struct RuleIndex<'a> {
+    /// Rules indexed by root node kind name.
+    by_kind: BTreeMap<&'static str, Vec<&'a Rule>>,
+    /// Rules with wildcard queries (Any) that apply to all nodes.
+    wildcard: Vec<&'a Rule>,
 }
 
-fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope, rewrite_depth: usize) -> Result<Vec<Id>, String> {
+impl<'a> RuleIndex<'a> {
+    fn new(rules: &'a [Rule]) -> Self {
+        let mut by_kind: BTreeMap<&'static str, Vec<&'a Rule>> = BTreeMap::new();
+        let mut wildcard = Vec::new();
+        for rule in rules {
+            match rule.query.root_kind() {
+                Some(kind) => by_kind.entry(kind).or_default().push(rule),
+                None => wildcard.push(rule),
+            }
+        }
+        Self { by_kind, wildcard }
+    }
+
+    fn rules_for_kind(&self, kind: &str) -> impl Iterator<Item = &&'a Rule> {
+        self.by_kind
+            .get(kind)
+            .into_iter()
+            .flat_map(|v| v.iter())
+            .chain(self.wildcard.iter())
+    }
+}
+
+fn apply_rules(rules: &[Rule], ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope) -> Result<Vec<Id>, String> {
+    let index = RuleIndex::new(rules);
+    apply_rules_inner(&index, ast, id, fresh, 0)
+}
+
+fn apply_rules_inner(index: &RuleIndex, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope, rewrite_depth: usize) -> Result<Vec<Id>, String> {
     if rewrite_depth > MAX_REWRITE_DEPTH {
         return Err(format!(
             "Desugaring exceeded maximum rewrite depth ({MAX_REWRITE_DEPTH}). \
@@ -570,12 +601,12 @@ fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_buil
         ));
     }
 
-    for rule in rules {
+    let node_kind = ast.get_node(id).map(|n| n.kind()).unwrap_or("");
+    for rule in index.rules_for_kind(node_kind) {
         if let Some(result_node) = rule.try_rule(ast, id, fresh)? {
             let mut results = Vec::new();
             for node in result_node {
-                // Increment depth only when re-processing rule output
-                results.extend(apply_rules_inner(rules, ast, node, fresh, rewrite_depth + 1)?);
+                results.extend(apply_rules_inner(index, ast, node, fresh, rewrite_depth + 1)?);
             }
             return Ok(results);
         }
@@ -589,7 +620,7 @@ fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_buil
         let old = std::mem::take(vec);
         let mut new = Vec::new();
         for child_id in old {
-            new.extend(apply_rules_inner(rules, ast, child_id, fresh, rewrite_depth)?);
+            new.extend(apply_rules_inner(index, ast, child_id, fresh, rewrite_depth)?);
         }
         *vec = new;
     }

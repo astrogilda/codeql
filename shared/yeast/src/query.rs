@@ -17,6 +17,19 @@ pub enum QueryNode {
     },
 }
 
+impl QueryNode {
+    /// Returns the root node kind this query matches, if it's specific.
+    /// Returns None for wildcards (Any) and captures wrapping wildcards.
+    pub fn root_kind(&self) -> Option<&'static str> {
+        match self {
+            QueryNode::Node { kind, .. } => Some(kind),
+            QueryNode::UnnamedNode { kind } => Some(kind),
+            QueryNode::Capture { node, .. } => node.root_kind(),
+            QueryNode::Any() => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum QueryListElem {
     Repeated { children: Vec<QueryListElem>, rep: Rep },
