@@ -562,23 +562,57 @@ pub fn parse_rule_top(input: TokenStream) -> Result<TokenStream> {
         }
     }).collect();
 
-    // Parse transform — could be single (tree!) or multiple (trees!)
-    // Try single first: one parenthesized group with nothing after
-    let transform_items = parse_direct_list(&mut tokens, &ctx_ident)?;
+    // Parse transform: either shorthand `=> kind_name` or full `=> (template ...)`
+    let transform_body = if peek_is_field(&mut tokens) && {
+        // Shorthand form: bare identifier = output node kind.
+        // Auto-generate template from captures.
+        let mut lookahead = tokens.clone();
+        lookahead.next(); // skip ident
+        lookahead.peek().is_none() // nothing after = shorthand
+    } {
+        let output_kind = expect_ident(&mut tokens, "expected output node kind")?;
+        let output_kind_str = output_kind.to_string();
 
-    if let Some(tok) = tokens.next() {
-        return Err(syn::Error::new_spanned(tok, "unexpected token after rule! transform"));
-    }
+        // Generate field assignments from captures
+        let field_stmts: Vec<TokenStream> = captures.iter().map(|cap| {
+            let name = Ident::new(&cap.name, Span::call_site());
+            let name_str = &cap.name;
+            if cap.repeated {
+                quote! {
+                    let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
+                        .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
+                    __fields.insert(__field_id, #name);
+                }
+            } else {
+                quote! {
+                    let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
+                        .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
+                    __fields.insert(__field_id, vec![#name]);
+                }
+            }
+        }).collect();
 
-    // Determine if single or multi result
-    let transform_body = if transform_items.len() == 1 {
-        // Could be single, but we always return Vec<Id> for Rule
         quote! {
-            let mut __nodes: Vec<usize> = Vec::new();
-            #(#transform_items)*
-            __nodes
+            let __kind = #ctx_ident.ast.id_for_node_kind(#output_kind_str)
+                .unwrap_or_else(|| panic!("node kind '{}' not found", #output_kind_str));
+            let mut __fields = std::collections::BTreeMap::new();
+            #(#field_stmts)*
+            let __id = #ctx_ident.ast.create_node(
+                __kind,
+                yeast::NodeContent::DynamicString(String::new()),
+                __fields,
+                true,
+            );
+            vec![__id]
         }
     } else {
+        // Full template form
+        let transform_items = parse_direct_list(&mut tokens, &ctx_ident)?;
+
+        if let Some(tok) = tokens.next() {
+            return Err(syn::Error::new_spanned(tok, "unexpected token after rule! transform"));
+        }
+
         quote! {
             let mut __nodes: Vec<usize> = Vec::new();
             #(#transform_items)*

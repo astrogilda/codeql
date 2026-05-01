@@ -155,3 +155,30 @@ fn test_cursor() {
     let mut printer = Printer {};
     printer.visit(cursor);
 }
+
+#[test]
+fn test_shorthand_rule() {
+    // Test the shorthand rule! syntax: captures become fields on a new node type.
+    // We'll rewrite (assignment left: X right: Y) into (assignment left: Y right: X)
+    // using the shorthand form where the output kind matches captures to fields.
+    let input = read_to_string("tests/fixtures/1.rb").unwrap();
+
+    // The shorthand maps @left and @right captures to left/right fields on "call"
+    // (using "call" as output kind since it also has named fields in Ruby's grammar)
+    let rule = yeast::rule!(
+        (assignment
+            left: (_) @method
+            right: (_) @receiver
+        )
+        => call
+    );
+
+    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![rule]);
+    let ast = runner.run(&input);
+
+    let output = serde_json::to_string_pretty(&ast.print(&input, ast.get_root())).unwrap();
+    // The assignment should have been rewritten into a call node
+    assert!(output.contains("\"call\""));
+    assert!(output.contains("\"method\""));
+    assert!(output.contains("\"receiver\""));
+}
