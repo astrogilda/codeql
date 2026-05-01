@@ -13,6 +13,8 @@ pub struct BuildCtx<'a> {
     pub ast: &'a mut Ast,
     pub captures: &'a Captures,
     pub fresh: &'a FreshScope,
+    /// Source range of the matched node, inherited by synthetic nodes.
+    pub source_range: Option<tree_sitter::Range>,
 }
 
 impl<'a> BuildCtx<'a> {
@@ -21,6 +23,16 @@ impl<'a> BuildCtx<'a> {
             ast,
             captures,
             fresh,
+            source_range: None,
+        }
+    }
+
+    pub fn with_source_range(ast: &'a mut Ast, captures: &'a Captures, fresh: &'a FreshScope, source_range: Option<tree_sitter::Range>) -> Self {
+        Self {
+            ast,
+            captures,
+            fresh,
+            source_range,
         }
     }
 
@@ -53,18 +65,18 @@ impl<'a> BuildCtx<'a> {
             })
             .collect();
         self.ast
-            .create_node(kind_id, NodeContent::DynamicString(String::new()), field_map, true)
+            .create_node_with_range(kind_id, NodeContent::DynamicString(String::new()), field_map, true, self.source_range)
     }
 
     /// Create a leaf node with a fixed string content.
     pub fn literal(&mut self, kind: &'static str, value: &str) -> Id {
-        self.ast.create_named_token(kind, value.to_string())
+        self.ast.create_named_token_with_range(kind, value.to_string(), self.source_range)
     }
 
     /// Create a leaf node with an auto-generated unique name.
     pub fn fresh(&mut self, kind: &'static str, name: &str) -> Id {
         let generated = self.fresh.resolve(name);
-        self.ast.create_named_token(kind, generated)
+        self.ast.create_named_token_with_range(kind, generated, self.source_range)
     }
 
     /// Create a node for unnamed children (the synthetic "child" field).
@@ -87,6 +99,6 @@ impl<'a> BuildCtx<'a> {
             field_map.insert(CHILD_FIELD, children);
         }
         self.ast
-            .create_node(kind_id, NodeContent::DynamicString(String::new()), field_map, true)
+            .create_node_with_range(kind_id, NodeContent::DynamicString(String::new()), field_map, true, self.source_range)
     }
 }

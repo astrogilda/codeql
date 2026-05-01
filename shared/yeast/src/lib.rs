@@ -206,6 +206,17 @@ impl Ast {
         fields: BTreeMap<FieldId, Vec<Id>>,
         is_named: bool,
     ) -> Id {
+        self.create_node_with_range(kind, content, children, is_named, None)
+    }
+
+    pub fn create_node_with_range(
+        &mut self,
+        kind: KindId,
+        content: NodeContent,
+        children: Vec<(FieldId, Id)>,
+        is_named: bool,
+        source_range: Option<tree_sitter::Range>,
+    ) -> Id {
         let id = self.nodes.len();
         self.nodes.push(Node {
             id,
@@ -217,11 +228,16 @@ impl Ast {
             is_error: false,
             is_extra: false,
             is_named,
+            source_range,
         });
         id
     }
 
     pub fn create_named_token(&mut self, kind: &'static str, content: String) -> Id {
+        self.create_named_token_with_range(kind, content, None)
+    }
+
+    pub fn create_named_token_with_range(&mut self, kind: &'static str, content: String, source_range: Option<tree_sitter::Range>) -> Id {
         let kind_id = self.language.id_for_node_kind(kind, true);
         let id = self.nodes.len();
         self.nodes.push(Node {
@@ -231,6 +247,7 @@ impl Ast {
             is_named: true,
             is_missing: false,
             is_error: false,
+            source_range,
             is_extra: false,
             fields: BTreeMap::new(),
             content: NodeContent::DynamicString(content),
@@ -318,6 +335,7 @@ impl Ast {
                     content: NodeContent::String("x = 1"),
                     is_missing: false,
                     is_error: false,
+            source_range: None,
                     is_extra: false,
                     is_named: true,
                 },
@@ -330,6 +348,7 @@ impl Ast {
                     content: NodeContent::String("x"),
                     is_missing: false,
                     is_error: false,
+            source_range: None,
                     is_extra: false,
                     is_named: true,
                 },
@@ -342,6 +361,7 @@ impl Ast {
                     content: NodeContent::String("="),
                     is_missing: false,
                     is_error: false,
+            source_range: None,
                     is_extra: false,
                     is_named: false,
                 },
@@ -354,6 +374,7 @@ impl Ast {
                     content: NodeContent::String("1"),
                     is_missing: false,
                     is_error: false,
+            source_range: None,
                     is_extra: false,
                     is_named: true,
                 },
@@ -388,6 +409,10 @@ pub struct Node {
     kind_name: &'static str,
     pub(crate) fields: BTreeMap<FieldId, Vec<Id>>,
     pub(crate) content: NodeContent,
+    /// For synthetic nodes, the source range of the original node they
+    /// were desugared from. Used for location information in TRAP output.
+    #[serde(skip)]
+    source_range: Option<tree_sitter::Range>,
     is_named: bool,
     is_missing: bool,
     is_extra: bool,
@@ -439,28 +464,34 @@ impl Node {
     pub fn start_position(&self) -> tree_sitter::Point {
         match self.content {
             NodeContent::Range(range) => range.start_point,
-            _ => self.fake_point(),
+            _ => self.source_range.map_or_else(
+                || self.fake_point(),
+                |r| r.start_point,
+            ),
         }
     }
 
     pub fn end_position(&self) -> tree_sitter::Point {
         match self.content {
             NodeContent::Range(range) => range.end_point,
-            _ => self.fake_point(),
+            _ => self.source_range.map_or_else(
+                || self.fake_point(),
+                |r| r.end_point,
+            ),
         }
     }
 
     pub fn start_byte(&self) -> usize {
         match self.content {
             NodeContent::Range(range) => range.start_byte,
-            _ => 0,
+            _ => self.source_range.map_or(0, |r| r.start_byte),
         }
     }
 
     pub fn end_byte(&self) -> usize {
         match self.content {
             NodeContent::Range(range) => range.end_byte,
-            _ => 0,
+            _ => self.source_range.map_or(0, |r| r.end_byte),
         }
     }
 
@@ -500,11 +531,11 @@ impl From<tree_sitter::Range> for NodeContent {
 
 pub struct Rule {
     query: QueryNode,
-    transform: Box<dyn Fn(&mut Ast, Captures, &tree_builder::FreshScope) -> Vec<Id>>,
+    transform: Box<dyn Fn(&mut Ast, Captures, &tree_builder::FreshScope, Option<tree_sitter::Range>) -> Vec<Id>>,
 }
 
 impl Rule {
-    pub fn new(query: QueryNode, transform: Box<dyn Fn(&mut Ast, Captures, &tree_builder::FreshScope) -> Vec<Id>>) -> Self {
+    pub fn new(query: QueryNode, transform: Box<dyn Fn(&mut Ast, Captures, &tree_builder::FreshScope, Option<tree_sitter::Range>) -> Vec<Id>>) -> Self {
         Self { query, transform }
     }
 
@@ -512,7 +543,14 @@ impl Rule {
         let mut captures = Captures::new();
         if self.query.do_match(ast, node, &mut captures).unwrap() {
             fresh.next_scope();
-            Some((self.transform)(ast, captures, fresh))
+            // Get the source range of the matched node for location info
+            let source_range = ast.get_node(node).and_then(|n| {
+                match n.content {
+                    NodeContent::Range(r) => Some(r),
+                    _ => n.source_range,
+                }
+            });
+            Some((self.transform)(ast, captures, fresh, source_range))
         } else {
             None
         }

@@ -623,9 +623,9 @@ pub fn parse_rule_top(input: TokenStream) -> Result<TokenStream> {
     Ok(quote! {
         {
             let __query = #query_code;
-            yeast::Rule::new(__query, Box::new(|__ast: &mut yeast::Ast, __captures: yeast::captures::Captures, __fresh: &yeast::tree_builder::FreshScope| {
+            yeast::Rule::new(__query, Box::new(|__ast: &mut yeast::Ast, __captures: yeast::captures::Captures, __fresh: &yeast::tree_builder::FreshScope, __source_range: Option<tree_sitter::Range>| {
                 #(#bindings)*
-                let mut #ctx_ident = yeast::build::BuildCtx::new(__ast, &__captures, __fresh);
+                let mut #ctx_ident = yeast::build::BuildCtx::with_source_range(__ast, &__captures, __fresh, __source_range);
                 #transform_body
             }))
         }

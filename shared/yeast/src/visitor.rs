@@ -68,6 +68,7 @@ impl Visitor {
                 is_named: n.is_named(),
                 is_extra: n.is_extra(),
                 is_error: n.is_error(),
+                source_range: None,
             },
             parent: self.current,
         });
