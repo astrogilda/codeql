@@ -13,7 +13,7 @@ pub fn rules() -> Vec<Rule> {
             left: (identifier $tmp)
             right: {right}
         )
-        {..left.iter().enumerate().map(|(i, &lhs)| {
+        {..left.iter().enumerate().map(|(i, &lhs)|
             yeast::tree!(
                 (assignment
                     left: {lhs}
@@ -23,7 +23,7 @@ pub fn rules() -> Vec<Rule> {
                     )
                 )
             )
-        })}
+        )}
     );
 
     let for_rule = yeast::rule!(
