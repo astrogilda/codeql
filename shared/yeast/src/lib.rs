@@ -539,52 +539,49 @@ impl Rule {
         Self { query, transform }
     }
 
-    fn try_rule(&self, ast: &mut Ast, node: Id, fresh: &tree_builder::FreshScope) -> Option<Vec<Id>> {
+    fn try_rule(&self, ast: &mut Ast, node: Id, fresh: &tree_builder::FreshScope) -> Result<Option<Vec<Id>>, String> {
         let mut captures = Captures::new();
-        if self.query.do_match(ast, node, &mut captures).unwrap() {
+        if self.query.do_match(ast, node, &mut captures)? {
             fresh.next_scope();
-            // Get the source range of the matched node for location info
             let source_range = ast.get_node(node).and_then(|n| {
                 match n.content {
                     NodeContent::Range(r) => Some(r),
                     _ => n.source_range,
                 }
             });
-            Some((self.transform)(ast, captures, fresh, source_range))
+            Ok(Some((self.transform)(ast, captures, fresh, source_range)))
         } else {
-            None
+            Ok(None)
         }
     }
 }
 
-fn apply_rules(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope) -> Vec<Id> {
-    // apply the transformation rules on this node
+fn apply_rules(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope) -> Result<Vec<Id>, String> {
     for rule in rules {
-        if let Some(result_node) = rule.try_rule(ast, id, fresh) {
-            // We transformed it so now recurse into the result
-            return result_node
-                .iter()
-                .flat_map(|node| apply_rules(rules, ast, *node, fresh))
-                .collect();
+        if let Some(result_node) = rule.try_rule(ast, id, fresh)? {
+            let mut results = Vec::new();
+            for node in result_node {
+                results.extend(apply_rules(rules, ast, node, fresh)?);
+            }
+            return Ok(results);
         }
     }
 
-    // copy the current node
     let mut node = ast.nodes[id].clone();
 
     // recursively descend into all the fields
     for vec in node.fields.values_mut() {
-        let mut old = Vec::new();
-        mem::swap(vec, &mut old);
-        *vec = old
-            .iter()
-            .flat_map(|node| apply_rules(rules, ast, *node, fresh))
-            .collect();
+        let old = std::mem::take(vec);
+        let mut new = Vec::new();
+        for child_id in old {
+            new.extend(apply_rules(rules, ast, child_id, fresh)?);
+        }
+        *vec = new;
     }
 
     node.id = ast.nodes.len();
     ast.nodes.push(node);
-    vec![ast.nodes.len() - 1]
+    Ok(vec![ast.nodes.len() - 1])
 }
 
 pub struct Runner {
@@ -597,28 +594,30 @@ impl Runner {
         Self { language, rules }
     }
 
-    pub fn run_from_tree(&self, tree: &tree_sitter::Tree) -> Ast {
+    pub fn run_from_tree(&self, tree: &tree_sitter::Tree) -> Result<Ast, String> {
         let fresh = tree_builder::FreshScope::new();
         let mut ast = Ast::from_tree(self.language.clone(), tree);
-        let res = apply_rules(&self.rules, &mut ast, 0, &fresh);
+        let res = apply_rules(&self.rules, &mut ast, 0, &fresh)?;
         if res.len() != 1 {
-            panic!("Expected at exactly one result node, got {}", res.len());
+            return Err(format!("Expected exactly one result node, got {}", res.len()));
         }
         ast.set_root(res[0]);
-        ast
+        Ok(ast)
     }
 
-    pub fn run(&self, input: &str) -> Ast {
+    pub fn run(&self, input: &str) -> Result<Ast, String> {
         let fresh = tree_builder::FreshScope::new();
         let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&self.language).unwrap();
-        let tree = parser.parse(input, None).unwrap();
+        parser.set_language(&self.language)
+            .map_err(|e| format!("Failed to set language: {e}"))?;
+        let tree = parser.parse(input, None)
+            .ok_or_else(|| "Failed to parse input".to_string())?;
         let mut ast = Ast::from_tree(self.language.clone(), &tree);
-        let res = apply_rules(&self.rules, &mut ast, 0, &fresh);
+        let res = apply_rules(&self.rules, &mut ast, 0, &fresh)?;
         if res.len() != 1 {
-            panic!("Expected at exactly one result node, got {}", res.len());
+            return Err(format!("Expected exactly one result node, got {}", res.len()));
         }
         ast.set_root(res[0]);
-        ast
+        Ok(ast)
     }
 }

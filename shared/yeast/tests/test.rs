@@ -6,7 +6,7 @@ use yeast::*;
 /// Helper: parse Ruby source, apply rules, return dump of result.
 fn run_and_dump(input: &str, rules: Vec<Rule>) -> String {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), rules);
-    let ast = runner.run(input);
+    let ast = runner.run(input).unwrap();
     dump_ast(&ast, ast.get_root(), input)
 }
 
@@ -64,7 +64,7 @@ program
 #[test]
 fn test_query_match() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let ast = runner.run("x = 1");
+    let ast = runner.run("x = 1").unwrap();
 
     let query = yeast::query!(
         (program
@@ -85,7 +85,7 @@ fn test_query_match() {
 #[test]
 fn test_query_no_match() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let ast = runner.run("x = 1");
+    let ast = runner.run("x = 1").unwrap();
 
     let query = yeast::query!(
         (program
@@ -103,7 +103,7 @@ fn test_query_no_match() {
 #[test]
 fn test_query_repeated_capture() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let ast = runner.run("x, y, z = 1");
+    let ast = runner.run("x, y, z = 1").unwrap();
 
     let query = yeast::query!(
         (assignment
@@ -129,7 +129,7 @@ fn test_query_repeated_capture() {
 #[test]
 fn test_tree_builder() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let mut ast = runner.run("x = 1");
+    let mut ast = runner.run("x = 1").unwrap();
     let input = "x = 1";
 
     let query = yeast::query!(
@@ -286,7 +286,7 @@ program
 #[test]
 fn test_cursor_navigation() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let ast = runner.run("x = 1");
+    let ast = runner.run("x = 1").unwrap();
     let mut cursor = AstCursor::new(&ast);
 
     // Start at root

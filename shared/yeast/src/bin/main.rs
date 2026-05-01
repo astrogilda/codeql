@@ -21,6 +21,6 @@ fn main() {
     let language = get_language(&args.language);
     let source = std::fs::read_to_string(&args.file).unwrap();
     let runner = yeast::Runner::new(language, vec![]);
-    let ast = runner.run(&source);
+    let ast = runner.run(&source).unwrap();
     println!("{}", ast.print(&source, ast.get_root()));
 }

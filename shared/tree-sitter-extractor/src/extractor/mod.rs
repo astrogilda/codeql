@@ -837,7 +837,12 @@ pub fn extract_and_desugar(
         schema,
     );
     let runner = yeast::Runner::new(language.clone(), rules);
-    let ast = runner.run_from_tree(&tree);
+    let ast = runner.run_from_tree(&tree)
+        .unwrap_or_else(|e| {
+            tracing::error!("Desugaring failed: {e}");
+            // Fall back to the un-desugared AST
+            yeast::Ast::from_tree(language.clone(), &tree)
+        });
 
     traverse_yeast(&ast, &mut visitor);
 
