@@ -556,12 +556,25 @@ impl Rule {
     }
 }
 
+const MAX_RULE_DEPTH: usize = 100;
+
 fn apply_rules(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope) -> Result<Vec<Id>, String> {
+    apply_rules_inner(rules, ast, id, fresh, 0)
+}
+
+fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope, depth: usize) -> Result<Vec<Id>, String> {
+    if depth > MAX_RULE_DEPTH {
+        return Err(format!(
+            "Desugaring exceeded maximum depth ({MAX_RULE_DEPTH}). \
+             This likely indicates a non-terminating rule cycle."
+        ));
+    }
+
     for rule in rules {
         if let Some(result_node) = rule.try_rule(ast, id, fresh)? {
             let mut results = Vec::new();
             for node in result_node {
-                results.extend(apply_rules(rules, ast, node, fresh)?);
+                results.extend(apply_rules_inner(rules, ast, node, fresh, depth + 1)?);
             }
             return Ok(results);
         }
@@ -574,7 +587,7 @@ fn apply_rules(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::F
         let old = std::mem::take(vec);
         let mut new = Vec::new();
         for child_id in old {
-            new.extend(apply_rules(rules, ast, child_id, fresh)?);
+            new.extend(apply_rules_inner(rules, ast, child_id, fresh, rewrite_depth)?);
         }
         *vec = new;
     }

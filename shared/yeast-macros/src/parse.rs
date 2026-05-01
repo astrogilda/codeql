@@ -480,26 +480,27 @@ struct CaptureInfo {
 /// they appear after `*` or `+` (repeated) or not.
 fn extract_captures(stream: &TokenStream) -> Vec<CaptureInfo> {
     let mut captures = Vec::new();
-    extract_captures_inner(&mut stream.clone().into_iter().peekable(), &mut captures);
+    extract_captures_inner(&mut stream.clone().into_iter().peekable(), &mut captures, false);
     captures
 }
 
-fn extract_captures_inner(tokens: &mut Tokens, captures: &mut Vec<CaptureInfo>) {
+fn extract_captures_inner(tokens: &mut Tokens, captures: &mut Vec<CaptureInfo>, parent_repeated: bool) {
     let mut last_was_repeated = false;
     while let Some(tok) = tokens.next() {
         match tok {
             TokenTree::Group(g) => {
                 let mut inner = g.stream().into_iter().peekable();
                 // Check if this group is followed by * or +
-                last_was_repeated = matches!(tokens.peek(),
+                let group_repeated = matches!(tokens.peek(),
                     Some(TokenTree::Punct(p)) if matches!(p.as_char(), '*' | '+'));
-                extract_captures_inner(&mut inner, captures);
+                last_was_repeated = group_repeated;
+                extract_captures_inner(&mut inner, captures, group_repeated || parent_repeated);
             }
             TokenTree::Punct(p) if p.as_char() == '@' => {
                 if let Some(TokenTree::Ident(name)) = tokens.next() {
                     captures.push(CaptureInfo {
                         name: name.to_string(),
-                        repeated: last_was_repeated,
+                        repeated: last_was_repeated || parent_repeated,
                     });
                 }
                 last_was_repeated = false;

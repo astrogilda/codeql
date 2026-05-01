@@ -82,8 +82,11 @@ impl QueryNode {
                 capture,
                 node: sub_query,
             } => {
-                matches.insert(capture, node);
-                sub_query.do_match(ast, node, matches)
+                let matched = sub_query.do_match(ast, node, matches)?;
+                if matched {
+                    matches.insert(capture, node);
+                }
+                Ok(matched)
             }
         }
     }
@@ -112,13 +115,17 @@ impl QueryListElem {
     ) -> Result<bool, String> {
         match self {
             QueryListElem::Repeated { children, rep } => {
+                if children.is_empty() {
+                    // Empty repetition always succeeds without consuming
+                    return Ok(*rep != Rep::OneOrMore);
+                }
+
                 let mut iters = 0;
 
                 loop {
                     let matches_initial = matches.clone();
                     let start = remaining_children.clone();
                     if !match_children(children.iter(), ast, remaining_children, matches)? {
-                        // Reset the state
                         *remaining_children = start;
                         *matches = matches_initial;
                         break;
