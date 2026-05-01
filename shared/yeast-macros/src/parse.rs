@@ -46,7 +46,11 @@ fn parse_query_atom(tokens: &mut Tokens) -> Result<TokenStream> {
         Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis => {
             let group = expect_group(tokens, Delimiter::Parenthesis)?;
             let mut inner = group.stream().into_iter().peekable();
-            parse_query_node_inner(&mut inner)
+            let result = parse_query_node_inner(&mut inner)?;
+            if let Some(tok) = inner.next() {
+                return Err(syn::Error::new_spanned(tok, "unexpected token in query node"));
+            }
+            Ok(result)
         }
         Some(tok) => Err(syn::Error::new_spanned(
             tok.clone(),
@@ -348,8 +352,10 @@ fn parse_direct_node_inner(tokens: &mut Tokens, ctx: &Ident) -> Result<TokenStre
                         __children.extend(#ctx.capture_all(#name_str));
                     });
                 } else {
-                    let node = parse_direct_node_inner(&mut inner, ctx)?;
-                    child_stmts.push(quote! { __children.push(#node); });
+                    return Err(syn::Error::new(
+                        Span::call_site(),
+                        "* after a non-capture group is not supported in tree templates; use (@name)* to splice a repeated capture",
+                    ));
                 }
                 has_children = true;
                 continue;

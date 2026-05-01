@@ -610,7 +610,8 @@ impl Runner {
     pub fn run_from_tree(&self, tree: &tree_sitter::Tree) -> Result<Ast, String> {
         let fresh = tree_builder::FreshScope::new();
         let mut ast = Ast::from_tree(self.language.clone(), tree);
-        let res = apply_rules(&self.rules, &mut ast, 0, &fresh)?;
+        let root = ast.get_root();
+        let res = apply_rules(&self.rules, &mut ast, root, &fresh)?;
         if res.len() != 1 {
             return Err(format!("Expected exactly one result node, got {}", res.len()));
         }
@@ -626,7 +627,8 @@ impl Runner {
         let tree = parser.parse(input, None)
             .ok_or_else(|| "Failed to parse input".to_string())?;
         let mut ast = Ast::from_tree(self.language.clone(), &tree);
-        let res = apply_rules(&self.rules, &mut ast, 0, &fresh)?;
+        let root = ast.get_root();
+        let res = apply_rules(&self.rules, &mut ast, root, &fresh)?;
         if res.len() != 1 {
             return Err(format!("Expected exactly one result node, got {}", res.len()));
         }

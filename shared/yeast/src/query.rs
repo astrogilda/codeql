@@ -200,7 +200,7 @@ mod tests {
         let query9: QueryNode = yeast::query!(
             (assignment
                 left: (element_reference
-                    object*: ((_) @obj)*
+                    object*: ((_) @obj)
                     (_) @index
                 )
                 right: (_) @rhs
