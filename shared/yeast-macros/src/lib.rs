@@ -8,16 +8,14 @@ mod parse;
 /// # Syntax
 ///
 /// ```text
-/// (_)                          - match any node
+/// (_)                          - match any named node (skips unnamed tokens)
 /// (kind)                       - match a named node of the given kind
-/// ("literal")                  - match an unnamed node (e.g. operators, keywords)
+/// ("literal")                  - match an unnamed token by its text
 /// (kind field: (pattern))      - match with named field
-/// (kind child*: (patterns...)) - match unnamed children (yeast-specific)
+/// (kind (pat) (pat)...)        - match unnamed children (after all fields)
 /// (pattern) @capture           - capture the matched node
-/// @capture                     - capture any node (shorthand for (_) @capture)
-/// (pat1 pat2)*                 - zero or more repetitions
-/// (pat1 pat2)+                 - one or more repetitions
-/// (pat1 pat2)?                 - zero or one repetitions
+/// (pattern)* @capture          - capture each repeated match
+/// (pattern)?                   - zero or one
 /// ```
 #[proc_macro]
 pub fn query(input: TokenStream) -> TokenStream {
@@ -29,6 +27,16 @@ pub fn query(input: TokenStream) -> TokenStream {
 }
 
 /// Build a single AST node from a template, returning its `Id`.
+///
+/// # Template syntax
+///
+/// ```text
+/// (kind field: @capture)       - node with captured child
+/// (kind "literal")             - leaf with static content
+/// (kind #{expr})               - leaf with computed content (expr.to_string())
+/// (kind $fresh)                - leaf with auto-generated unique name
+/// {expr}                       - embed a Rust expression returning Id
+/// ```
 ///
 /// Can be called with an explicit context or using the implicit context
 /// from an enclosing `rule!`:
@@ -47,6 +55,13 @@ pub fn tree(input: TokenStream) -> TokenStream {
 }
 
 /// Build a list of AST nodes from a template, returning `Vec<Id>`.
+///
+/// Supports all syntax from `tree!`, plus:
+///
+/// ```text
+/// {..expr}                     - splice an iterable of Id
+/// (@capture)*                  - splice a repeated capture
+/// ```
 ///
 /// Can be called with an explicit context or using the implicit context
 /// from an enclosing `rule!`:
@@ -68,21 +83,21 @@ pub fn trees(input: TokenStream) -> TokenStream {
 ///
 /// ```text
 /// rule!(
-///     (query_pattern
-///         field: (_) @capture_name
-///         (kind)* @repeated
-///     )
+///     (query_pattern field: (_) @name (kind)* @repeated (_)? @optional)
 ///     =>
-///     (output_template
-///         field: {capture_name}
-///         {..repeated}
-///     )
+///     (output_template field: {name} {..repeated})
 /// )
+///
+/// // Shorthand: captures become fields on the output node
+/// rule!((query ...) => output_kind)
 /// ```
 ///
-/// Captures become Rust variables: `@name` binds `name: Id` (single)
-/// or `name: Vec<Id>` (after `*`/`+`). The transform can use `tree!`
-/// and `trees!` without an explicit context.
+/// Captures become Rust variables automatically:
+/// - `@name` (no quantifier) → `name: Id`
+/// - `@name` (after `*`/`+`) → `name: Vec<Id>`
+/// - `@name` (after `?`) → `name: Option<Id>`
+///
+/// `tree!` and `trees!` can be used without explicit context inside `{...}`.
 #[proc_macro]
 pub fn rule(input: TokenStream) -> TokenStream {
     let input2: TokenStream2 = input.into();

@@ -206,14 +206,14 @@ impl Ast {
         fields: BTreeMap<FieldId, Vec<Id>>,
         is_named: bool,
     ) -> Id {
-        self.create_node_with_range(kind, content, children, is_named, None)
+        self.create_node_with_range(kind, content, fields, is_named, None)
     }
 
     pub fn create_node_with_range(
         &mut self,
         kind: KindId,
         content: NodeContent,
-        children: Vec<(FieldId, Id)>,
+        fields: BTreeMap<FieldId, Vec<Id>>,
         is_named: bool,
         source_range: Option<tree_sitter::Range>,
     ) -> Id {

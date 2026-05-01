@@ -130,35 +130,47 @@ children. Named node patterns like `(_)` automatically skip unnamed tokens
 ## Template language
 
 Templates construct new AST nodes using the `tree!` and `trees!` macros.
-Both take a `BuildCtx` as their first argument, which holds the AST,
-captures from the query match, and a fresh identifier scope.
+
+When used inside a `rule!` macro, the context is implicit — no explicit
+`BuildCtx` argument is needed. When used standalone, they take a `BuildCtx`
+as the first argument:
 
 ```rust
-let mut ctx = BuildCtx::new(ast, &captures);
+// Inside rule! — implicit context
+yeast::rule!(
+    (assignment left: (_) @left right: (_) @right)
+    =>
+    (assignment left: {right} right: {left})
+);
+
+// Standalone — explicit context
+let fresh = yeast::tree_builder::FreshScope::new();
+let mut ctx = BuildCtx::new(ast, &captures, &fresh);
+let id = yeast::tree!(ctx, (assignment left: @lhs right: @rhs));
 ```
 
 ### `tree!` — build a single node
 
-`tree!(ctx, ...)` returns a single node `Id`:
+`tree!(...)` returns a single node `Id`:
 
 ```rust
-let id = yeast::tree!(ctx,
+yeast::tree!(ctx,
     (assignment
         left: @lhs
         right: @rhs
     )
-);
+)
 ```
 
 ### `trees!` — build multiple nodes
 
-`trees!(ctx, ...)` returns `Vec<Id>`:
+`trees!(...)` returns `Vec<Id>`:
 
 ```rust
-let ids = yeast::trees!(ctx,
+yeast::trees!(ctx,
     (assignment left: @tmp right: @right)
     (@body)*
-);
+)
 ```
 
 ### Capture references
@@ -245,38 +257,58 @@ This rule rewrites Ruby's `for pat in val do body end` into
 `val.each { |tmp| pat = tmp; body }`:
 
 ```rust
-let query = yeast::query!(
+let for_rule = yeast::rule!(
     (for
         pattern: (_) @pat
         value: (in (_) @val)
         body: (do (_)* @body)
     )
-);
-
-let transform = |ast: &mut Ast, match_: Captures| {
-    let mut ctx = BuildCtx::new(ast, &match_);
-    vec![yeast::tree!(ctx,
-        (call
-            receiver: @val
-            method: (identifier "each")
-            block: (block
-                parameters: (block_parameters
-                    (identifier $tmp)
+    =>
+    (call
+        receiver: {val}
+        method: (identifier "each")
+        block: (block
+            parameters: (block_parameters
+                (identifier $tmp)
+            )
+            body: (block_body
+                (assignment
+                    left: {pat}
+                    right: (identifier $tmp)
                 )
-                body: (block_body
-                    (assignment
-                        left: @pat
-                        right: (identifier $tmp)
-                    )
-                    (@body)*
-                )
+                {..body}
             )
         )
-    )]
-};
-
-let rule = Rule::new(query, Box::new(transform));
+    )
+);
 ```
+
+Captures from the query (`@pat`, `@val`, `@body`) become Rust variables
+automatically: single captures bind as `Id`, repeated captures (after
+`*` or `+`) as `Vec<Id>`, and optional captures (after `?`) as
+`Option<Id>`.
+
+## The `rule!` macro
+
+`rule!` combines a query and a transform into a single declaration:
+
+```rust
+// Full template form
+yeast::rule!(
+    (query_pattern field: (_) @capture)
+    =>
+    (output_template field: {capture})
+)
+
+// Shorthand form — captures become fields on the output node
+yeast::rule!(
+    (query_pattern field: (_) @capture)
+    => output_kind
+)
+```
+
+The shorthand `=> kind` form auto-generates the template, mapping each
+capture name to a field of the same name on the output node.
 
 ## Integration with the extractor
 

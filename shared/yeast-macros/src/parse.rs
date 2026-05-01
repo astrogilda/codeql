@@ -605,9 +605,6 @@ pub fn parse_rule_top(input: TokenStream) -> Result<TokenStream> {
                 CaptureMultiplicity::Repeated => quote! {
                     let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
                         .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
-                CaptureMultiplicity::Repeated => quote! {
-                    let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
-                        .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
                     __fields.insert(__field_id, #name);
                 },
                 CaptureMultiplicity::Optional => quote! {
