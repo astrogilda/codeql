@@ -312,3 +312,36 @@ fn test_cursor_navigation() {
     // Can't go further up
     assert!(!cursor.goto_parent());
 }
+
+#[test]
+fn test_desugar_for_with_multiple_assignment() {
+    let dump = run_and_dump("for a, b in list do\n  x\nend", ruby_rules());
+    assert_eq!(dump.trim(), "\
+program
+  call
+    block:
+      block
+        body:
+          block_body
+            assignment
+              left: identifier \"$tmp-0\"
+              right: identifier \"$tmp-0\"
+            assignment
+              left: identifier \"a\"
+              right:
+                element_reference
+                  object: identifier \"$tmp-0\"
+                  integer \"0\"
+            assignment
+              left: identifier \"b\"
+              right:
+                element_reference
+                  object: identifier \"$tmp-0\"
+                  integer \"1\"
+            identifier \"x\"
+        parameters:
+          block_parameters
+            identifier \"$tmp-0\"
+    method: identifier \"each\"
+    receiver: identifier \"list\"");
+}
