@@ -18,6 +18,45 @@ use tree_sitter::{Language, Node, Parser, Range, Tree};
 
 pub mod simple;
 
+/// Trait abstracting over tree-sitter and yeast node types for extraction.
+trait AstNode {
+    fn kind(&self) -> &str;
+    fn is_named(&self) -> bool;
+    fn is_missing(&self) -> bool;
+    fn is_error(&self) -> bool;
+    fn is_extra(&self) -> bool;
+    fn start_position(&self) -> tree_sitter::Point;
+    fn end_position(&self) -> tree_sitter::Point;
+    fn byte_range(&self) -> std::ops::Range<usize>;
+    fn start_byte(&self) -> usize { self.byte_range().start }
+    fn end_byte(&self) -> usize { self.byte_range().end }
+    /// For yeast nodes with synthetic content, return it. Otherwise None.
+    fn opt_string_content(&self) -> Option<String> { None }
+}
+
+impl<'a> AstNode for Node<'a> {
+    fn kind(&self) -> &str { Node::kind(self) }
+    fn is_named(&self) -> bool { Node::is_named(self) }
+    fn is_missing(&self) -> bool { Node::is_missing(self) }
+    fn is_error(&self) -> bool { Node::is_error(self) }
+    fn is_extra(&self) -> bool { Node::is_extra(self) }
+    fn start_position(&self) -> tree_sitter::Point { Node::start_position(self) }
+    fn end_position(&self) -> tree_sitter::Point { Node::end_position(self) }
+    fn byte_range(&self) -> std::ops::Range<usize> { Node::byte_range(self) }
+}
+
+impl AstNode for yeast::Node {
+    fn kind(&self) -> &str { yeast::Node::kind(self) }
+    fn is_named(&self) -> bool { yeast::Node::is_named(self) }
+    fn is_missing(&self) -> bool { yeast::Node::is_missing(self) }
+    fn is_error(&self) -> bool { yeast::Node::is_error(self) }
+    fn is_extra(&self) -> bool { yeast::Node::is_extra(self) }
+    fn start_position(&self) -> tree_sitter::Point { yeast::Node::start_position(self) }
+    fn end_position(&self) -> tree_sitter::Point { yeast::Node::end_position(self) }
+    fn byte_range(&self) -> std::ops::Range<usize> { yeast::Node::byte_range(self) }
+    fn opt_string_content(&self) -> Option<String> { yeast::Node::opt_string_content(self) }
+}
+
 /// Sets the tracing level based on the environment variables
 /// `RUST_LOG` and `CODEQL_VERBOSITY` (prioritized in that order),
 /// falling back to `warn` if neither is set.
@@ -329,11 +368,11 @@ impl<'a> Visitor<'a> {
         );
     }
 
-    fn record_parse_error_for_node(
+    fn record_parse_error_for_node<N: AstNode>(
         &mut self,
         message: &str,
         args: &[diagnostics::MessageArg],
-        node: Node,
+        node: &N,
         status_page: bool,
     ) {
         let loc = location_for(self, self.file_label, node);
@@ -357,7 +396,7 @@ impl<'a> Visitor<'a> {
         self.record_parse_error(loc_label, &mesg);
     }
 
-    fn enter_node(&mut self, node: Node) -> bool {
+    fn enter_node<N: AstNode>(&mut self, node: &N) -> bool {
         if node.is_missing() {
             self.record_parse_error_for_node(
                 "A parse error occurred (expected {} symbol). Check the syntax of the file. If the file is invalid, correct the error or {} the file from analysis.",
@@ -383,7 +422,7 @@ impl<'a> Visitor<'a> {
         true
     }
 
-    fn leave_node(&mut self, field_name: Option<&'static str>, node: Node) {
+    fn leave_node<N: AstNode>(&mut self, field_name: Option<&'static str>, node: &N) {
         if node.is_error() || node.is_missing() {
             return;
         }
@@ -434,7 +473,7 @@ impl<'a> Visitor<'a> {
                 fields,
                 name: table_name,
             } => {
-                if let Some(args) = self.complex_node(&node, fields, &child_nodes, id) {
+                if let Some(args) = self.complex_node(node, fields, &child_nodes, id) {
                     self.trap_writer.add_tuple(
                         &self.ast_node_location_table_name,
                         vec![trap::Arg::Label(id), trap::Arg::Label(loc_label)],
@@ -495,9 +534,9 @@ impl<'a> Visitor<'a> {
         }
     }
 
-    fn complex_node(
+    fn complex_node<N: AstNode>(
         &mut self,
-        node: &Node,
+        node: &N,
         fields: &[Field],
         child_nodes: &[ChildNode],
         parent_id: trap::Label,
@@ -529,7 +568,7 @@ impl<'a> Visitor<'a> {
                             diagnostics::MessageArg::Code(&format!("{:?}", child_node.type_name)),
                             diagnostics::MessageArg::Code(&format!("{:?}", field.type_info)),
                         ],
-                        *node,
+                        node,
                         false,
                     );
                 }
@@ -541,7 +580,7 @@ impl<'a> Visitor<'a> {
                         diagnostics::MessageArg::Code(child_node.field_name.unwrap_or("child")),
                         diagnostics::MessageArg::Code(&format!("{:?}", child_node.type_name)),
                     ],
-                    *node,
+                    node,
                     false,
                 );
             }
@@ -566,7 +605,7 @@ impl<'a> Visitor<'a> {
                             node.kind(),
                             column_name
                         );
-                        self.record_parse_error_for_node(&error_message, &[], *node, false);
+                        self.record_parse_error_for_node(&error_message, &[], node, false);
                     }
                 }
                 Storage::Table {
@@ -582,7 +621,7 @@ impl<'a> Visitor<'a> {
                                     diagnostics::MessageArg::Code(node.kind()),
                                     diagnostics::MessageArg::Code(table_name),
                                 ],
-                                *node,
+                                node,
                                 false,
                             );
                             break;
@@ -639,15 +678,17 @@ impl<'a> Visitor<'a> {
 }
 
 // Emit a slice of a source file as an Arg.
-fn sliced_source_arg(source: &[u8], n: Node) -> trap::Arg {
-    let range = n.byte_range();
-    trap::Arg::String(String::from_utf8_lossy(&source[range.start..range.end]).into_owned())
+fn sliced_source_arg<N: AstNode>(source: &[u8], n: &N) -> trap::Arg {
+    trap::Arg::String(n.opt_string_content().unwrap_or_else(|| {
+        let range = n.byte_range();
+        String::from_utf8_lossy(&source[range.start..range.end]).into_owned()
+    }))
 }
 
 // Emit a pair of `TrapEntry`s for the provided node, appropriately calibrated.
 // The first is the location and label definition, and the second is the
 // 'Located' entry.
-fn location_for(visitor: &mut Visitor, file_label: trap::Label, n: Node) -> trap::Location {
+fn location_for<N: AstNode>(visitor: &mut Visitor, file_label: trap::Label, n: &N) -> trap::Location {
     // Tree-sitter row, column values are 0-based while CodeQL starts
     // counting at 1. In addition Tree-sitter's row and column for the
     // end position are exclusive while CodeQL's end positions are inclusive.
@@ -715,16 +756,16 @@ fn location_for(visitor: &mut Visitor, file_label: trap::Label, n: Node) -> trap
 
 fn traverse(tree: &Tree, visitor: &mut Visitor) {
     let cursor = &mut tree.walk();
-    visitor.enter_node(cursor.node());
+    visitor.enter_node(&cursor.node());
     let mut recurse = true;
     loop {
         if recurse && cursor.goto_first_child() {
-            recurse = visitor.enter_node(cursor.node());
+            recurse = visitor.enter_node(&cursor.node());
         } else {
-            visitor.leave_node(cursor.field_name(), cursor.node());
+            visitor.leave_node(cursor.field_name(), &cursor.node());
 
             if cursor.goto_next_sibling() {
-                recurse = visitor.enter_node(cursor.node());
+                recurse = visitor.enter_node(&cursor.node());
             } else if cursor.goto_parent() {
                 recurse = false;
             } else {
@@ -803,13 +844,24 @@ pub fn extract_and_desugar(
     parser.reset();
 }
 
-fn traverse_yeast(_tree: &yeast::Ast, _visitor: &mut Visitor) {
-    // TODO: Implement yeast-based traversal that adapts yeast::Node
-    // to the Visitor's expectations. This requires either:
-    // (a) A trait abstracting over tree_sitter::Node and yeast::Node, or
-    // (b) A separate Visitor implementation for yeast types.
-    // For now, this is unreachable because extract_and_desugar
-    // falls through to extract() when rules are empty, and no language
-    // currently passes non-empty rules.
-    unimplemented!("yeast-based TRAP extraction is not yet implemented; use extract() for languages without desugaring rules")
+fn traverse_yeast(tree: &yeast::Ast, visitor: &mut Visitor) {
+    use yeast::Cursor;
+    let mut cursor = tree.walk();
+    visitor.enter_node(cursor.node());
+    let mut recurse = true;
+    loop {
+        if recurse && cursor.goto_first_child() {
+            recurse = visitor.enter_node(cursor.node());
+        } else {
+            visitor.leave_node(cursor.field_name(), cursor.node());
+
+            if cursor.goto_next_sibling() {
+                recurse = visitor.enter_node(cursor.node());
+            } else if cursor.goto_parent() {
+                recurse = false;
+            } else {
+                break;
+            }
+        }
+    }
 }
