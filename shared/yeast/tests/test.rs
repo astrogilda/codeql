@@ -1,75 +1,70 @@
 #![cfg(test)]
-use std::cell::Cell;
-use std::fs::read_to_string;
-use std::path::Path;
-use std::rc::Rc;
 
-use yeast::{captures::Captures, print::Printer, *, rules::rules};
+use yeast::dump::dump_ast;
+use yeast::*;
 
-#[test]
-fn test_ruby_multiple_assignment() {
-    // We want to convert this
-    //
-    // x, y, z = e
-    //
-    // into this
-    //
-    // tmp = e
-    // x = tmp[0]
-    // y = tmp[1]
-    // z = tmp[2]
-
-    // Define a desugaring rule, which is a query together with a transformation.
-
-    let input = "for a, b in pairs_list do\n  x=y\nend";
-
-    // Construct the thing that runs our desugaring process
-    let runner = Runner::new(
-        tree_sitter_ruby::LANGUAGE.into(),
-        rules(),
-    );
-
-    let old_root = 0;
-
-    // Run it on our example
+/// Helper: parse Ruby source, apply rules, return dump of result.
+fn run_and_dump(input: &str, rules: Vec<Rule>) -> String {
+    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), rules);
     let ast = runner.run(input);
-    let new_root = ast.get_root();
+    dump_ast(&ast, ast.get_root(), input)
+}
 
-    let formattedInput = serde_json::to_string_pretty(&ast.print(input, old_root)).unwrap();
-    let formattedOutput = serde_json::to_string_pretty(&ast.print(input, new_root)).unwrap();
+/// Helper: parse Ruby source with no rules, return dump.
+fn parse_and_dump(input: &str) -> String {
+    run_and_dump(input, vec![])
+}
 
-    println!("before transformation: {}", formattedInput);
-    println!("after transformation: {}", formattedOutput);
+// ---- Parsing tests ----
 
-    assert_eq!(
-        formattedInput,
-        read_to_string("tests/fixtures/multiple_assignment.input.json").unwrap()
-    );
-    assert_eq!(
-        formattedOutput,
-        read_to_string("tests/fixtures/multiple_assignment.output.json").unwrap()
-    );
+#[test]
+fn test_parse_assignment() {
+    let dump = parse_and_dump("x = 1");
+    assert_eq!(dump.trim(), "\
+program
+  assignment
+    left: identifier \"x\"
+    right: integer \"1\"");
 }
 
 #[test]
-fn test_parse_input() {
-    let input = read_to_string("tests/fixtures/1.rb").unwrap();
-    let parsed_expected = read_to_string("tests/fixtures/1.parsed.json").unwrap();
-
-    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let ast = runner.run(&input);
-    let parsed_actual = serde_json::to_string_pretty(&ast.print(&input, ast.get_root())).unwrap();
-
-    assert_eq!(parsed_actual, parsed_expected);
+fn test_parse_multiple_assignment() {
+    let dump = parse_and_dump("x, y = foo()");
+    assert_eq!(dump.trim(), "\
+program
+  assignment
+    left:
+      left_assignment_list
+        identifier \"x\"
+        identifier \"y\"
+    right:
+      call
+        arguments:
+          argument_list
+        method: identifier \"foo\"");
 }
 
 #[test]
-fn test_query_input() {
-    let input = read_to_string("tests/fixtures/1.rb").unwrap();
-    let rewritten_expected = read_to_string("tests/fixtures/1.rewritten.json").unwrap();
+fn test_parse_for_loop() {
+    let dump = parse_and_dump("for x in list do\n  y\nend");
+    assert_eq!(dump.trim(), "\
+program
+  for
+    body:
+      do
+        identifier \"y\"
+    pattern: identifier \"x\"
+    value:
+      in
+        identifier \"list\"");
+}
 
+// ---- Query tests ----
+
+#[test]
+fn test_query_match() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let mut ast = runner.run(&input);
+    let ast = runner.run("x = 1");
 
     let query = yeast::query!(
         (program
@@ -79,16 +74,78 @@ fn test_query_input() {
             )
         )
     );
-    print!("query: {:?}", query);
 
-    let mut matches = Captures::new();
-    if query.do_match(&ast, ast.get_root(), &mut matches).unwrap() {
-        println!("match: {:?}", matches);
-    } else {
-        println!("no match");
-    }
+    let mut captures = yeast::captures::Captures::new();
+    let matched = query.do_match(&ast, ast.get_root(), &mut captures).unwrap();
+    assert!(matched);
+    assert!(captures.get_var("left").is_ok());
+    assert!(captures.get_var("right").is_ok());
+}
 
-    let mut ctx = yeast::build::BuildCtx::new(&mut ast, &matches);
+#[test]
+fn test_query_no_match() {
+    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
+    let ast = runner.run("x = 1");
+
+    let query = yeast::query!(
+        (program
+            child: (call
+                method: (_) @m
+            )
+        )
+    );
+
+    let mut captures = yeast::captures::Captures::new();
+    let matched = query.do_match(&ast, ast.get_root(), &mut captures).unwrap();
+    assert!(!matched);
+}
+
+#[test]
+fn test_query_repeated_capture() {
+    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
+    let ast = runner.run("x, y, z = 1");
+
+    let query = yeast::query!(
+        (assignment
+            left: (left_assignment_list
+                (identifier)* @names
+            )
+        )
+    );
+
+    // Match against the assignment node (first named child of program)
+    let mut cursor = AstCursor::new(&ast);
+    cursor.goto_first_child();
+    let assignment_id = cursor.node().id();
+
+    let mut captures = yeast::captures::Captures::new();
+    let matched = query.do_match(&ast, assignment_id, &mut captures).unwrap();
+    assert!(matched);
+    assert_eq!(captures.get_all("names").len(), 3);
+}
+
+// ---- Tree builder tests ----
+
+#[test]
+fn test_tree_builder() {
+    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
+    let mut ast = runner.run("x = 1");
+    let input = "x = 1";
+
+    let query = yeast::query!(
+        (program
+            child: (assignment
+                left: (_) @left
+                right: (_) @right
+            )
+        )
+    );
+
+    let mut captures = yeast::captures::Captures::new();
+    query.do_match(&ast, ast.get_root(), &mut captures).unwrap();
+
+    // Swap left and right
+    let mut ctx = yeast::build::BuildCtx::new(&mut ast, &captures);
     let new_id = yeast::tree!(ctx,
         (program
             child: (assignment
@@ -98,73 +155,115 @@ fn test_query_input() {
         )
     );
 
-    let rewritten_actual = serde_json::to_string_pretty(&ctx.ast.print(&input, new_id)).unwrap();
-
-    write_expected("tests/fixtures/1.rewritten.json", &rewritten_actual);
-    assert_eq!(rewritten_actual, rewritten_expected);
+    let dump = dump_ast(ctx.ast, new_id, input);
+    assert_eq!(dump.trim(), "\
+program
+  assignment
+    left: integer \"1\"
+    right: identifier \"x\"");
 }
 
-/// Useful for updating fixtures
-/// ```
-/// write_expected("tests/fixtures/1.parsed.json", &parsed_actual);
-/// ```
-fn write_expected<P: AsRef<Path>>(file: P, content: &str) {
-    use std::io::Write;
-    std::fs::File::create(file)
-        .unwrap()
-        .write_all(content.as_bytes())
-        .unwrap();
+// ---- Rule tests ----
+
+fn ruby_rules() -> Vec<Rule> {
+    let assign_rule = yeast::rule!(
+        (assignment
+            left: (left_assignment_list
+                (identifier)* @left
+            )
+            right: (_) @right
+        )
+        =>
+        (assignment
+            left: (identifier $tmp)
+            right: {right}
+        )
+        {..left.iter().enumerate().map(|(i, &lhs)|
+            yeast::tree!(
+                (assignment
+                    left: {lhs}
+                    right: (element_reference
+                        object: (identifier $tmp)
+                        (integer #{i})
+                    )
+                )
+            )
+        )}
+    );
+
+    let for_rule = yeast::rule!(
+        (for
+            pattern: (_) @pat
+            value: (in (_) @val)
+            body: (do (_)* @body)
+        )
+        =>
+        (call
+            receiver: {val}
+            method: (identifier "each")
+            block: (block
+                parameters: (block_parameters
+                    (identifier $tmp)
+                )
+                body: (block_body
+                    (assignment
+                        left: {pat}
+                        right: (identifier $tmp)
+                    )
+                    {..body}
+                )
+            )
+        )
+    );
+
+    vec![assign_rule, for_rule]
 }
 
 #[test]
-fn test_cursor() {
-    let input = read_to_string("tests/fixtures/1.rb").unwrap();
+fn test_desugar_multiple_assignment() {
+    let dump = run_and_dump("x, y = e", ruby_rules());
+    assert_eq!(dump.trim(), "\
+program
+  assignment
+    left: identifier \"$tmp-0\"
+    right: identifier \"e\"
+  assignment
+    left: identifier \"x\"
+    right:
+      element_reference
+        object: identifier \"$tmp-0\"
+        integer \"0\"
+  assignment
+    left: identifier \"y\"
+    right:
+      element_reference
+        object: identifier \"$tmp-0\"
+        integer \"1\"");
+}
 
-    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let ast = runner.run(&input);
-    let mut cursor = AstCursor::new(&ast);
-
-    assert_eq!(cursor.node().id(), ast.get_root());
-    assert_eq!(cursor.field_id(), None);
-
-    assert!(cursor.goto_first_child());
-    assert_eq!(cursor.node().id(), 26);
-
-    assert!(!cursor.goto_next_sibling());
-    assert_eq!(cursor.node().id(), 26);
-
-    assert!(cursor.goto_first_child());
-    assert_eq!(cursor.node().id(), 19);
-
-    assert!(cursor.goto_first_child());
-    assert_eq!(cursor.node().id(), 14);
-
-    assert!(!cursor.goto_first_child());
-    assert_eq!(cursor.node().id(), 14);
-
-    assert!(cursor.goto_next_sibling());
-    assert_eq!(cursor.node().id(), 15);
-    assert_eq!(cursor.field_id(), Some(CHILD_FIELD));
-
-    assert!(cursor.goto_parent());
-    assert_eq!(cursor.node().id(), 19);
-
-    assert_eq!(cursor.field_id(), Some(18));
-
-    let cursor = AstCursor::new(&ast);
-    let mut printer = Printer {};
-    printer.visit(cursor);
+#[test]
+fn test_desugar_for_loop() {
+    let dump = run_and_dump("for x in list do\n  y\nend", ruby_rules());
+    assert_eq!(dump.trim(), "\
+program
+  call
+    block:
+      block
+        body:
+          block_body
+            assignment
+              left: identifier \"x\"
+              right: identifier \"$tmp-0\"
+            identifier \"y\"
+        parameters:
+          block_parameters
+            identifier \"$tmp-0\"
+    method: identifier \"each\"
+    receiver: identifier \"list\"");
 }
 
 #[test]
 fn test_shorthand_rule() {
-    // Test the shorthand rule! syntax: captures become fields on a new node type.
-    // We'll rewrite (assignment left: X right: Y) into (assignment left: Y right: X)
-    // using the shorthand form where the output kind matches captures to fields.
-    let input = read_to_string("tests/fixtures/1.rb").unwrap();
-
-    // The shorthand maps @left and @right captures to left/right fields on "call"
-    // (using "call" as output kind since it also has named fields in Ruby's grammar)
     let rule = yeast::rule!(
         (assignment
             left: (_) @method
@@ -173,24 +272,43 @@ fn test_shorthand_rule() {
         => call
     );
 
-    let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![rule]);
-    let ast = runner.run(&input);
-
-    let output = serde_json::to_string_pretty(&ast.print(&input, ast.get_root())).unwrap();
-    // The assignment should have been rewritten into a call node
-    assert!(output.contains("\"call\""));
-    assert!(output.contains("\"method\""));
-    assert!(output.contains("\"receiver\""));
+    let dump = run_and_dump("x = 1", vec![rule]);
+    assert_eq!(dump.trim(), "\
+program
+  call
+    method: identifier \"x\"
+    receiver: integer \"1\"");
 }
 
+// ---- Cursor tests ----
+
 #[test]
-fn test_dump_ast() {
-    let input = "x, y = foo()";
+fn test_cursor_navigation() {
     let runner = Runner::new(tree_sitter_ruby::LANGUAGE.into(), vec![]);
-    let ast = runner.run(input);
-    let output = yeast::dump::dump_ast(&ast, ast.get_root(), input);
-    println!("{}", output);
-    assert!(output.contains("program"));
-    assert!(output.contains("assignment"));
-    assert!(output.contains("identifier"));
+    let ast = runner.run("x = 1");
+    let mut cursor = AstCursor::new(&ast);
+
+    // Start at root
+    assert_eq!(cursor.node().kind(), "program");
+
+    // Go to first child (assignment)
+    assert!(cursor.goto_first_child());
+    assert_eq!(cursor.node().kind(), "assignment");
+
+    // No sibling
+    assert!(!cursor.goto_next_sibling());
+
+    // Go to first child of assignment
+    assert!(cursor.goto_first_child());
+    assert!(cursor.node().is_named());
+
+    // Go back up
+    assert!(cursor.goto_parent());
+    assert_eq!(cursor.node().kind(), "assignment");
+
+    assert!(cursor.goto_parent());
+    assert_eq!(cursor.node().kind(), "program");
+
+    // Can't go further up
+    assert!(!cursor.goto_parent());
 }

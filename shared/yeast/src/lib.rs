@@ -13,7 +13,6 @@ pub mod node_types_yaml;
 pub mod print;
 pub mod query;
 mod range;
-pub mod rules;
 pub mod tree_builder;
 mod visitor;
 
