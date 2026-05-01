@@ -123,6 +123,7 @@ pub fn run(options: Options) -> std::io::Result<()> {
                     &path,
                     &source,
                     &[],
+                    vec![],
                 );
 
                 let (ranges, line_breaks) = scan_erb(
@@ -211,6 +212,7 @@ pub fn run(options: Options) -> std::io::Result<()> {
                 &path,
                 &source,
                 &code_ranges,
+                vec![],
             );
             std::fs::create_dir_all(src_archive_file.parent().unwrap())?;
             if needs_conversion {

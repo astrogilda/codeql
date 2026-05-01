@@ -167,6 +167,7 @@ impl Extractor {
                                     &path,
                                     &source,
                                     &[],
+                                    vec![],
                                 );
                                 std::fs::create_dir_all(src_archive_file.parent().unwrap())?;
                                 std::fs::copy(&path, &src_archive_file)?;

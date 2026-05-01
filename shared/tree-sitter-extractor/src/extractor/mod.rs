@@ -243,6 +243,8 @@ pub fn location_label(writer: &mut trap::Writer, location: trap::Location) -> tr
 }
 
 /// Extracts the source file at `path`, which is assumed to be canonicalized.
+/// When `rules` is non-empty, the parsed tree is first transformed through
+/// yeast before TRAP extraction.
 pub fn extract(
     language: &Language,
     language_prefix: &str,
@@ -253,6 +255,7 @@ pub fn extract(
     path: &Path,
     source: &[u8],
     ranges: &[Range],
+    rules: Vec<yeast::Rule>,
 ) {
     let path_str = file_paths::normalize_and_transform_path(path, transformer);
     let span = tracing::span!(
@@ -275,13 +278,23 @@ pub fn extract(
         source,
         diagnostics_writer,
         trap_writer,
-        // TODO: should we handle path strings that are not valid UTF8 better?
         &path_str,
         file_label,
         language_prefix,
         schema,
     );
-    traverse(&tree, &mut visitor);
+
+    if rules.is_empty() {
+        traverse(&tree, &mut visitor);
+    } else {
+        let runner = yeast::Runner::new(language.clone(), rules);
+        let ast = runner.run_from_tree(&tree)
+            .unwrap_or_else(|e| {
+                tracing::error!("Desugaring failed: {e}");
+                yeast::Ast::from_tree(language.clone(), &tree)
+            });
+        traverse_yeast(&ast, &mut visitor);
+    }
 
     parser.reset();
 }
@@ -773,80 +786,6 @@ fn traverse(tree: &Tree, visitor: &mut Visitor) {
             }
         }
     }
-}
-
-/// Like [`extract`], but applies yeast desugaring rules to the parsed tree
-/// before extracting TRAP. The desugared AST may have a different structure
-/// than the original tree-sitter parse tree.
-///
-/// Note: This function uses yeast's own AST traversal, which may produce
-/// different child ordering than tree-sitter's native traversal. Only use
-/// this for languages that have desugaring rules.
-pub fn extract_and_desugar(
-    language: &Language,
-    language_prefix: &str,
-    schema: &NodeTypeMap,
-    diagnostics_writer: &mut diagnostics::LogWriter,
-    trap_writer: &mut trap::Writer,
-    transformer: Option<&file_paths::PathTransformer>,
-    path: &Path,
-    source: &[u8],
-    ranges: &[Range],
-    rules: Vec<yeast::Rule>,
-) {
-    if rules.is_empty() {
-        // No desugaring needed — use the standard extract path
-        // which preserves tree-sitter's source-order traversal.
-        return extract(
-            language,
-            language_prefix,
-            schema,
-            diagnostics_writer,
-            trap_writer,
-            transformer,
-            path,
-            source,
-            ranges,
-        );
-    }
-
-    let path_str = file_paths::normalize_and_transform_path(path, transformer);
-    let span = tracing::span!(
-        tracing::Level::TRACE,
-        "extract_and_desugar",
-        file = %path_str
-    );
-
-    let _enter = span.enter();
-
-    tracing::debug!("extracting (with desugaring): {}", path_str);
-
-    let mut parser = Parser::new();
-    parser.set_language(language).unwrap();
-    parser.set_included_ranges(ranges).unwrap();
-    let tree = parser.parse(source, None).expect("Failed to parse file");
-    trap_writer.comment(format!("Auto-generated TRAP file for {path_str}"));
-    let file_label = populate_file(trap_writer, path, transformer);
-    let mut visitor = Visitor::new(
-        source,
-        diagnostics_writer,
-        trap_writer,
-        &path_str,
-        file_label,
-        language_prefix,
-        schema,
-    );
-    let runner = yeast::Runner::new(language.clone(), rules);
-    let ast = runner.run_from_tree(&tree)
-        .unwrap_or_else(|e| {
-            tracing::error!("Desugaring failed: {e}");
-            // Fall back to the un-desugared AST
-            yeast::Ast::from_tree(language.clone(), &tree)
-        });
-
-    traverse_yeast(&ast, &mut visitor);
-
-    parser.reset();
 }
 
 fn traverse_yeast(tree: &yeast::Ast, visitor: &mut Visitor) {
