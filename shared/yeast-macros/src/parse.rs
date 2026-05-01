@@ -212,28 +212,43 @@ fn parse_query_list(tokens: &mut Tokens) -> Result<Vec<TokenStream>> {
 // tree! / trees! parsing — direct code generation against BuildCtx
 // ---------------------------------------------------------------------------
 
-/// Parse `tree!(ctx, template)` — unified macro that returns `Id` for a single
-/// top-level element or `Vec<Id>` for multiple elements.
+const IMPLICIT_CTX: &str = "__yeast_ctx";
+
+/// Determine the context identifier: either explicit `ctx,` or the implicit
+/// `__yeast_ctx` from an enclosing `rule!`.
+fn parse_ctx_or_implicit(tokens: &mut Tokens) -> Ident {
+    // Check if first token is an ident followed by a comma
+    let mut lookahead = tokens.clone();
+    let is_explicit = matches!(lookahead.next(), Some(TokenTree::Ident(_)))
+        && matches!(lookahead.next(), Some(TokenTree::Punct(p)) if p.as_char() == ',');
+
+    if is_explicit {
+        let ctx = expect_ident(tokens, "").unwrap();
+        let _ = tokens.next(); // consume comma
+        ctx
+    } else {
+        Ident::new(IMPLICIT_CTX, Span::call_site())
+    }
+}
+
+/// Parse `tree!(ctx, (template))` or `tree!((template))` — returns single `Id`.
 pub fn parse_tree_top(input: TokenStream) -> Result<TokenStream> {
     let mut tokens = input.into_iter().peekable();
-    let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
-    expect_punct(&mut tokens, ',', "expected `,` after context")?;
+    let ctx = parse_ctx_or_implicit(&mut tokens);
 
-    // Parse the first element as the single node
     let first = parse_direct_node(&mut tokens, &ctx)?;
 
     if let Some(tok) = tokens.next() {
-        return Err(syn::Error::new_spanned(tok, "unexpected tokens after tree! template; use vec![tree!(...), ...] for multiple nodes"));
+        return Err(syn::Error::new_spanned(tok, "unexpected tokens after tree! template; use trees! for multiple nodes"));
     }
 
     Ok(quote! { { #first } })
 }
 
-/// Parse `trees!(ctx, ...)` — returns `Vec<Id>`.
+/// Parse `trees!(ctx, ...)` or `trees!(...)` — returns `Vec<Id>`.
 pub fn parse_trees_top(input: TokenStream) -> Result<TokenStream> {
     let mut tokens = input.into_iter().peekable();
-    let ctx = expect_ident(&mut tokens, "expected build context identifier")?;
-    expect_punct(&mut tokens, ',', "expected `,` after context")?;
+    let ctx = parse_ctx_or_implicit(&mut tokens);
     let items = parse_direct_list(&mut tokens, &ctx)?;
     if let Some(tok) = tokens.next() {
         return Err(syn::Error::new_spanned(tok, "unexpected token after trees! template"));
@@ -449,6 +464,138 @@ fn parse_direct_list(tokens: &mut Tokens, ctx: &Ident) -> Result<Vec<TokenStream
         break;
     }
     Ok(items)
+}
+
+// ---------------------------------------------------------------------------
+// rule! parsing
+// ---------------------------------------------------------------------------
+
+/// A captured variable from a query pattern.
+struct CaptureInfo {
+    name: String,
+    repeated: bool,
+}
+
+/// Walk a token stream and extract all `@name` captures, noting whether
+/// they appear after `*` or `+` (repeated) or not.
+fn extract_captures(stream: &TokenStream) -> Vec<CaptureInfo> {
+    let mut captures = Vec::new();
+    extract_captures_inner(&mut stream.clone().into_iter().peekable(), &mut captures);
+    captures
+}
+
+fn extract_captures_inner(tokens: &mut Tokens, captures: &mut Vec<CaptureInfo>) {
+    let mut last_was_repeated = false;
+    while let Some(tok) = tokens.next() {
+        match tok {
+            TokenTree::Group(g) => {
+                let mut inner = g.stream().into_iter().peekable();
+                // Check if this group is followed by * or +
+                last_was_repeated = matches!(tokens.peek(),
+                    Some(TokenTree::Punct(p)) if matches!(p.as_char(), '*' | '+'));
+                extract_captures_inner(&mut inner, captures);
+            }
+            TokenTree::Punct(p) if p.as_char() == '@' => {
+                if let Some(TokenTree::Ident(name)) = tokens.next() {
+                    captures.push(CaptureInfo {
+                        name: name.to_string(),
+                        repeated: last_was_repeated,
+                    });
+                }
+                last_was_repeated = false;
+            }
+            TokenTree::Punct(p) if matches!(p.as_char(), '*' | '+') => {
+                // Keep last_was_repeated — the @capture follows
+            }
+            _ => {
+                last_was_repeated = false;
+            }
+        }
+    }
+}
+
+/// Parse `rule!( query => transform )`.
+pub fn parse_rule_top(input: TokenStream) -> Result<TokenStream> {
+    let mut tokens = input.into_iter().peekable();
+
+    // Collect query tokens up to `=>`
+    let mut query_tokens = Vec::new();
+    loop {
+        match tokens.peek() {
+            None => return Err(syn::Error::new(Span::call_site(), "expected `=>` in rule!")),
+            Some(TokenTree::Punct(p)) if p.as_char() == '=' => {
+                let eq = tokens.next().unwrap();
+                match tokens.peek() {
+                    Some(TokenTree::Punct(p)) if p.as_char() == '>' => {
+                        tokens.next(); // consume >
+                        break;
+                    }
+                    _ => {
+                        query_tokens.push(eq);
+                        continue;
+                    }
+                }
+            }
+            _ => {
+                query_tokens.push(tokens.next().unwrap());
+            }
+        }
+    }
+
+    let query_stream: TokenStream = query_tokens.into_iter().collect();
+
+    // Extract captures from query
+    let captures = extract_captures(&query_stream);
+
+    // Parse query
+    let query_code = parse_query_top(query_stream.clone())?;
+
+    // Generate capture bindings
+    let ctx_ident = Ident::new(IMPLICIT_CTX, Span::call_site());
+    let bindings: Vec<TokenStream> = captures.iter().map(|cap| {
+        let name = Ident::new(&cap.name, Span::call_site());
+        let name_str = &cap.name;
+        if cap.repeated {
+            quote! { let #name: Vec<usize> = __captures.get_all(#name_str); }
+        } else {
+            quote! { let #name: usize = __captures.get_var(#name_str).unwrap(); }
+        }
+    }).collect();
+
+    // Parse transform — could be single (tree!) or multiple (trees!)
+    // Try single first: one parenthesized group with nothing after
+    let transform_items = parse_direct_list(&mut tokens, &ctx_ident)?;
+
+    if let Some(tok) = tokens.next() {
+        return Err(syn::Error::new_spanned(tok, "unexpected token after rule! transform"));
+    }
+
+    // Determine if single or multi result
+    let transform_body = if transform_items.len() == 1 {
+        // Could be single, but we always return Vec<Id> for Rule
+        quote! {
+            let mut __nodes: Vec<usize> = Vec::new();
+            #(#transform_items)*
+            __nodes
+        }
+    } else {
+        quote! {
+            let mut __nodes: Vec<usize> = Vec::new();
+            #(#transform_items)*
+            __nodes
+        }
+    };
+
+    Ok(quote! {
+        {
+            let __query = #query_code;
+            yeast::Rule::new(__query, Box::new(|__ast: &mut yeast::Ast, __captures: yeast::captures::Captures| {
+                #(#bindings)*
+                let mut #ctx_ident = yeast::build::BuildCtx::new(__ast, &__captures);
+                #transform_body
+            }))
+        }
+    })
 }
 
 // ---------------------------------------------------------------------------

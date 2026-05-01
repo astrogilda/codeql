@@ -1,69 +1,55 @@
 use crate::{build::BuildCtx, captures::Captures, *};
 
 pub fn rules() -> Vec<Rule> {
-    let assign_query = yeast::query!(
+    let assign_rule = yeast::rule!(
         (assignment
             left: (left_assignment_list
                 (identifier)* @left
             )
             right: (_) @right
         )
-    );
-    let assign_transform = |ast: &mut Ast, match_: Captures| {
-        let left_ids = match_.get_all("left");
-        let mut ctx = BuildCtx::new(ast, &match_);
-
-        yeast::trees!(ctx,
-            (assignment
-                left: (identifier $tmp)
-                right: @right
-            )
-            {..left_ids.iter().enumerate().map(|(i, &lhs)| {
-                yeast::tree!(ctx,
-                    (assignment
-                        left: {lhs}
-                        right: (element_reference
-                            object: (identifier $tmp)
-                            (integer #{i})
-                        )
+        =>
+        (assignment
+            left: (identifier $tmp)
+            right: {right}
+        )
+        {..left.iter().enumerate().map(|(i, &lhs)| {
+            yeast::tree!(
+                (assignment
+                    left: {lhs}
+                    right: (element_reference
+                        object: (identifier $tmp)
+                        (integer #{i})
                     )
                 )
-            })}
-        )
-    };
+            )
+        })}
+    );
 
-    let assign_rule = Rule::new(assign_query, Box::new(assign_transform));
-
-    let for_query = yeast::query!(
+    let for_rule = yeast::rule!(
         (for
             pattern: (_) @pat
             value: (in (_) @val)
             body: (do (_)* @body)
         )
-    );
-    let for_transform = |ast: &mut Ast, match_: Captures| {
-        let mut ctx = BuildCtx::new(ast, &match_);
-        vec![yeast::tree!(ctx,
-            (call
-                receiver: @val
-                method: (identifier "each")
-                block: (block
-                    parameters: (block_parameters
-                        (identifier $tmp)
+        =>
+        (call
+            receiver: {val}
+            method: (identifier "each")
+            block: (block
+                parameters: (block_parameters
+                    (identifier $tmp)
+                )
+                body: (block_body
+                    (assignment
+                        left: {pat}
+                        right: (identifier $tmp)
                     )
-                    body: (block_body
-                        (assignment
-                            left: @pat
-                            right: (identifier $tmp)
-                        )
-                        (@body)*
-                    )
+                    {..body}
                 )
             )
-        )]
-    };
-
-    let for_rule = Rule::new(for_query, Box::new(for_transform));
+        )
+    );
 
     vec![assign_rule, for_rule]
 }
