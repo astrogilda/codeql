@@ -27,4 +27,11 @@ impl FreshScope {
             })
             .clone()
     }
+
+    /// Clear resolved names but keep the counter. Called between rule
+    /// applications so that `$tmp` in different rules gets different values
+    /// while the counter increases monotonically.
+    pub fn next_scope(&self) {
+        self.resolved.borrow_mut().clear();
+    }
 }

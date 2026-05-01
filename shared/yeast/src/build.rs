@@ -12,15 +12,15 @@ use crate::{Ast, Id, NodeContent, CHILD_FIELD};
 pub struct BuildCtx<'a> {
     pub ast: &'a mut Ast,
     pub captures: &'a Captures,
-    pub fresh: FreshScope,
+    pub fresh: &'a FreshScope,
 }
 
 impl<'a> BuildCtx<'a> {
-    pub fn new(ast: &'a mut Ast, captures: &'a Captures) -> Self {
+    pub fn new(ast: &'a mut Ast, captures: &'a Captures, fresh: &'a FreshScope) -> Self {
         Self {
             ast,
             captures,
-            fresh: FreshScope::new(),
+            fresh,
         }
     }
 

@@ -145,7 +145,8 @@ fn test_tree_builder() {
     query.do_match(&ast, ast.get_root(), &mut captures).unwrap();
 
     // Swap left and right
-    let mut ctx = yeast::build::BuildCtx::new(&mut ast, &captures);
+    let fresh = yeast::tree_builder::FreshScope::new();
+    let mut ctx = yeast::build::BuildCtx::new(&mut ast, &captures, &fresh);
     let new_id = yeast::tree!(ctx,
         (program
             child: (assignment
@@ -324,19 +325,19 @@ program
         body:
           block_body
             assignment
-              left: identifier \"$tmp-0\"
+              left: identifier \"$tmp-1\"
               right: identifier \"$tmp-0\"
             assignment
               left: identifier \"a\"
               right:
                 element_reference
-                  object: identifier \"$tmp-0\"
+                  object: identifier \"$tmp-1\"
                   integer \"0\"
             assignment
               left: identifier \"b\"
               right:
                 element_reference
-                  object: identifier \"$tmp-0\"
+                  object: identifier \"$tmp-1\"
                   integer \"1\"
             identifier \"x\"
         parameters:
