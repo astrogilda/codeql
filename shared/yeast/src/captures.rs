@@ -42,6 +42,14 @@ impl Captures {
         self.captures.get(key).cloned().unwrap_or_default()
     }
 
+    /// Get an optional capture variable. Returns None if unmatched,
+    /// Some(id) if matched exactly once.
+    pub fn get_opt(&self, key: &str) -> Option<Id> {
+        self.captures.get(key).and_then(|ids| {
+            if ids.len() == 1 { Some(ids[0]) } else { None }
+        })
+    }
+
     pub fn insert(&mut self, key: &'static str, id: Id) {
         self.captures.entry(key).or_default().push(id);
     }

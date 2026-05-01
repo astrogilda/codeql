@@ -464,43 +464,69 @@ fn parse_direct_list(tokens: &mut Tokens, ctx: &Ident) -> Result<Vec<TokenStream
 /// A captured variable from a query pattern.
 struct CaptureInfo {
     name: String,
-    repeated: bool,
+    multiplicity: CaptureMultiplicity,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum CaptureMultiplicity {
+    /// Exactly one match (bare pattern or after no quantifier)
+    Single,
+    /// Zero or one match (after `?`)
+    Optional,
+    /// Zero or more matches (after `*` or `+`, or inside a repeated group)
+    Repeated,
 }
 
 /// Walk a token stream and extract all `@name` captures, noting whether
 /// they appear after `*` or `+` (repeated) or not.
 fn extract_captures(stream: &TokenStream) -> Vec<CaptureInfo> {
     let mut captures = Vec::new();
-    extract_captures_inner(&mut stream.clone().into_iter().peekable(), &mut captures, false);
+    extract_captures_inner(&mut stream.clone().into_iter().peekable(), &mut captures, CaptureMultiplicity::Single);
     captures
 }
 
-fn extract_captures_inner(tokens: &mut Tokens, captures: &mut Vec<CaptureInfo>, parent_repeated: bool) {
-    let mut last_was_repeated = false;
+fn extract_captures_inner(tokens: &mut Tokens, captures: &mut Vec<CaptureInfo>, parent_mult: CaptureMultiplicity) {
+    let mut last_mult = CaptureMultiplicity::Single;
     while let Some(tok) = tokens.next() {
         match tok {
             TokenTree::Group(g) => {
                 let mut inner = g.stream().into_iter().peekable();
-                // Check if this group is followed by * or +
-                let group_repeated = matches!(tokens.peek(),
-                    Some(TokenTree::Punct(p)) if matches!(p.as_char(), '*' | '+'));
-                last_was_repeated = group_repeated;
-                extract_captures_inner(&mut inner, captures, group_repeated || parent_repeated);
+                let group_mult = match tokens.peek() {
+                    Some(TokenTree::Punct(p)) if p.as_char() == '*' || p.as_char() == '+' => CaptureMultiplicity::Repeated,
+                    Some(TokenTree::Punct(p)) if p.as_char() == '?' => CaptureMultiplicity::Optional,
+                    _ => CaptureMultiplicity::Single,
+                };
+                last_mult = group_mult;
+                let child_mult = if parent_mult == CaptureMultiplicity::Repeated || group_mult == CaptureMultiplicity::Repeated {
+                    CaptureMultiplicity::Repeated
+                } else if parent_mult == CaptureMultiplicity::Optional || group_mult == CaptureMultiplicity::Optional {
+                    CaptureMultiplicity::Optional
+                } else {
+                    CaptureMultiplicity::Single
+                };
+                extract_captures_inner(&mut inner, captures, child_mult);
             }
             TokenTree::Punct(p) if p.as_char() == '@' => {
                 if let Some(TokenTree::Ident(name)) = tokens.next() {
+                    let mult = if parent_mult == CaptureMultiplicity::Repeated || last_mult == CaptureMultiplicity::Repeated {
+                        CaptureMultiplicity::Repeated
+                    } else if parent_mult == CaptureMultiplicity::Optional || last_mult == CaptureMultiplicity::Optional {
+                        CaptureMultiplicity::Optional
+                    } else {
+                        CaptureMultiplicity::Single
+                    };
                     captures.push(CaptureInfo {
                         name: name.to_string(),
-                        repeated: last_was_repeated || parent_repeated,
+                        multiplicity: mult,
                     });
                 }
-                last_was_repeated = false;
+                last_mult = CaptureMultiplicity::Single;
             }
-            TokenTree::Punct(p) if matches!(p.as_char(), '*' | '+') => {
-                // Keep last_was_repeated — the @capture follows
+            TokenTree::Punct(p) if matches!(p.as_char(), '*' | '+' | '?') => {
+                // Keep last_mult — the @capture follows
             }
             _ => {
-                last_was_repeated = false;
+                last_mult = CaptureMultiplicity::Single;
             }
         }
     }
@@ -547,10 +573,16 @@ pub fn parse_rule_top(input: TokenStream) -> Result<TokenStream> {
     let bindings: Vec<TokenStream> = captures.iter().map(|cap| {
         let name = Ident::new(&cap.name, Span::call_site());
         let name_str = &cap.name;
-        if cap.repeated {
-            quote! { let #name: Vec<usize> = __captures.get_all(#name_str); }
-        } else {
-            quote! { let #name: usize = __captures.get_var(#name_str).unwrap(); }
+        match cap.multiplicity {
+            CaptureMultiplicity::Repeated => {
+                quote! { let #name: Vec<usize> = __captures.get_all(#name_str); }
+            }
+            CaptureMultiplicity::Optional => {
+                quote! { let #name: Option<usize> = __captures.get_opt(#name_str); }
+            }
+            CaptureMultiplicity::Single => {
+                quote! { let #name: usize = __captures.get_var(#name_str).unwrap(); }
+            }
         }
     }).collect();
 
@@ -569,18 +601,27 @@ pub fn parse_rule_top(input: TokenStream) -> Result<TokenStream> {
         let field_stmts: Vec<TokenStream> = captures.iter().map(|cap| {
             let name = Ident::new(&cap.name, Span::call_site());
             let name_str = &cap.name;
-            if cap.repeated {
-                quote! {
+            match cap.multiplicity {
+                CaptureMultiplicity::Repeated => quote! {
+                    let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
+                        .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
+                CaptureMultiplicity::Repeated => quote! {
                     let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
                         .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
                     __fields.insert(__field_id, #name);
-                }
-            } else {
-                quote! {
+                },
+                CaptureMultiplicity::Optional => quote! {
                     let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
                         .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
-                    __fields.insert(__field_id, vec![#name]);
-                }
+                    if let Some(__id) = #name {
+                        __fields.entry(__field_id).or_insert_with(Vec::new).push(__id);
+                    }
+                },
+                CaptureMultiplicity::Single => quote! {
+                    let __field_id = #ctx_ident.ast.field_id_for_name(#name_str)
+                        .unwrap_or_else(|| panic!("field '{}' not found", #name_str));
+                    __fields.entry(__field_id).or_insert_with(Vec::new).push(#name);
+                },
             }
         }).collect();
 
