@@ -630,11 +630,12 @@ pub fn parse_rule_top(input: TokenStream) -> Result<TokenStream> {
                 .unwrap_or_else(|| panic!("node kind '{}' not found", #output_kind_str));
             let mut __fields = std::collections::BTreeMap::new();
             #(#field_stmts)*
-            let __id = #ctx_ident.ast.create_node(
+            let __id = #ctx_ident.ast.create_node_with_range(
                 __kind,
                 yeast::NodeContent::DynamicString(String::new()),
                 __fields,
                 true,
+                __source_range,
             );
             vec![__id]
         }

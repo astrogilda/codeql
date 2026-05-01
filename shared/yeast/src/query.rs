@@ -125,9 +125,16 @@ impl QueryListElem {
                 loop {
                     let matches_initial = matches.clone();
                     let start = remaining_children.clone();
+                    let start_next = start.clone().next();
                     if !match_children(children.iter(), ast, remaining_children, matches)? {
                         *remaining_children = start;
                         *matches = matches_initial;
+                        break;
+                    }
+                    // Guard against zero-width matches: if the iterator
+                    // didn't advance, break to avoid infinite looping.
+                    let current_next = remaining_children.clone().next();
+                    if start_next == current_next {
                         break;
                     }
                     iters += 1;

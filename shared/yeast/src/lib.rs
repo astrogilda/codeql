@@ -556,16 +556,16 @@ impl Rule {
     }
 }
 
-const MAX_RULE_DEPTH: usize = 100;
+const MAX_REWRITE_DEPTH: usize = 100;
 
 fn apply_rules(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope) -> Result<Vec<Id>, String> {
     apply_rules_inner(rules, ast, id, fresh, 0)
 }
 
-fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope, depth: usize) -> Result<Vec<Id>, String> {
-    if depth > MAX_RULE_DEPTH {
+fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_builder::FreshScope, rewrite_depth: usize) -> Result<Vec<Id>, String> {
+    if rewrite_depth > MAX_REWRITE_DEPTH {
         return Err(format!(
-            "Desugaring exceeded maximum depth ({MAX_RULE_DEPTH}). \
+            "Desugaring exceeded maximum rewrite depth ({MAX_REWRITE_DEPTH}). \
              This likely indicates a non-terminating rule cycle."
         ));
     }
@@ -574,7 +574,8 @@ fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_buil
         if let Some(result_node) = rule.try_rule(ast, id, fresh)? {
             let mut results = Vec::new();
             for node in result_node {
-                results.extend(apply_rules_inner(rules, ast, node, fresh, depth + 1)?);
+                // Increment depth only when re-processing rule output
+                results.extend(apply_rules_inner(rules, ast, node, fresh, rewrite_depth + 1)?);
             }
             return Ok(results);
         }
@@ -583,6 +584,7 @@ fn apply_rules_inner(rules: &Vec<Rule>, ast: &mut Ast, id: Id, fresh: &tree_buil
     let mut node = ast.nodes[id].clone();
 
     // recursively descend into all the fields
+    // Child traversal does not increment rewrite depth
     for vec in node.fields.values_mut() {
         let old = std::mem::take(vec);
         let mut new = Vec::new();
